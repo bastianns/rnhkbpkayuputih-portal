@@ -15,7 +15,7 @@ import {
   UserPlus,
   Plus,
   Trash2,
-  PlayCircle // Icon baru untuk tombol inisialisasi
+  PlayCircle 
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -46,6 +46,27 @@ export default function SettingsPage() {
 
   useEffect(() => { fetchData(); }, [activeTab]);
 
+  // --- [BARU] HELPER UNTUK MENCATAT LOG (CCTV) ---
+  const logActivity = async (action: string, entity: string, entityId: string | null, newData: any = null) => {
+    try {
+      // 1. Ambil User yang sedang login
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 2. Catat ke Audit Log
+      await supabase.from('audit_log').insert({
+        actor_id: user?.id || null, // ID Admin yang login
+        action: action,
+        entity: entity,
+        entity_id: entityId, // ID data yang diubah
+        new_data: newData, // Detail perubahan
+        created_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error("Gagal mencatat log:", err);
+      // Jangan throw error biar proses utama tetep jalan walau log gagal
+    }
+  };
+
   // --- LOGIKA ENGINE CALIBRATION (UPDATE) ---
   const handleUpdateLocal = (fieldName: string, key: string, value: number) => {
     setParameters(prev => prev.map(p => p.field_name === fieldName ? { ...p, [key]: value } : p));
@@ -64,18 +85,25 @@ export default function SettingsPage() {
         unmatch_probability_u: param.unmatch_probability_u
       }).eq('field_name', param.field_name);
     }
+
+    // [LOG] Catat Perubahan Engine
+    await logActivity(
+      'UPDATE_ENGINE_PARAMS', 
+      'dedup_parameter', 
+      null, 
+      { updated_params: parameters }
+    );
+
     alert("Konfigurasi mesin berhasil diperbarui!");
     setSaving(false);
     fetchData();
   };
 
   // --- LOGIKA BARU: INISIALISASI ENGINE (INSERT) ---
-  // Fitur ini memungkinkan kamu mengisi data awal dari frontend tanpa SQL
   const handleInitializeEngine = async () => {
     setSaving(true);
     
-    // 1. BERSIHKAN DATA LAMA AGAR TIDAK DUPLIKAT/ERROR
-    // Menghapus semua data di tabel dedup_parameter sebelum insert ulang
+    // 1. BERSIHKAN DATA LAMA
     const { error: deleteError } = await supabase.from('dedup_parameter').delete().neq('field_name', 'PLACEHOLDER_SAFETY');
     
     if (deleteError) {
@@ -85,13 +113,12 @@ export default function SettingsPage() {
         return;
     }
 
-    // 2. DATA DEFAULT (SUDAH DIPERBAIKI: ADA ID_WIJK)
+    // 2. DATA DEFAULT
     const defaultParams = [
       { field_name: 'nama_lengkap', match_probability_m: 0.95, unmatch_probability_u: 0.05 },
       { field_name: 'tanggal_lahir', match_probability_m: 0.90, unmatch_probability_u: 0.10 },
       { field_name: 'email', match_probability_m: 0.99, unmatch_probability_u: 0.01 },
       { field_name: 'no_telp', match_probability_m: 0.90, unmatch_probability_u: 0.10 },
-      // [FIX] INI YANG HILANG SEBELUMNYA:
       { field_name: 'id_wijk', match_probability_m: 0.60, unmatch_probability_u: 0.40 } 
     ];
 
@@ -100,8 +127,16 @@ export default function SettingsPage() {
     if (error) {
       alert("Gagal inisialisasi: " + error.message);
     } else {
+      // [LOG] Catat Reset Engine
+      await logActivity(
+        'RESET_ENGINE_DEFAULT', 
+        'dedup_parameter', 
+        null, 
+        { action: 'Factory Reset to Fellegi-Sunter Defaults' }
+      );
+
       alert("Mesin SSOT berhasil diinisialisasi ulang lengkap dengan parameter Wijk!");
-      fetchData(); // Refresh otomatis agar slider muncul
+      fetchData(); 
     }
     setSaving(false);
   };
@@ -111,20 +146,37 @@ export default function SettingsPage() {
     if (!newName) return;
     let payload: any = {};
     let table = '';
+    let entityName = '';
 
     if (activeTab === 'wijk') {
       table = 'wijk';
+      entityName = 'Master Wijk';
       payload = { nama_wijk: newName };
     } else if (activeTab === 'kegiatan') {
       table = 'kategori_kegiatan';
+      entityName = 'Master Kegiatan';
       payload = { nama_kategori: newName, bobot_dasar: newWeight };
     } else if (activeTab === 'peran') {
       table = 'katalog_peran';
+      entityName = 'Master Peran';
       payload = { nama_peran: newName, bobot_kontribusi: newWeight };
     }
 
-    const { error } = await supabase.from(table).insert(payload);
-    if (!error) {
+    // [UPDATE] Pakai .select().single() biar dapet ID data yang baru dibuat untuk log
+    const { data, error } = await supabase.from(table).insert(payload).select().single();
+    
+    if (!error && data) {
+      // Tentukan ID yang mana tergantung tabel
+      const newId = data.id_wijk || data.id_kategori_kegiatan || data.id_peran;
+
+      // [LOG] Catat Penambahan Data Master
+      await logActivity(
+        'INSERT_MASTER_DATA', 
+        table, 
+        newId, 
+        { ...payload, category: entityName }
+      );
+
       setNewName('');
       fetchData();
     }
@@ -136,8 +188,20 @@ export default function SettingsPage() {
     
     if (confirm('Hapus data referensi ini? Jemaat yang terhubung mungkin akan kehilangan relasi data.')) {
       // @ts-ignore
-      await supabase.from(tableMap[activeTab]).delete().eq(idMap[activeTab], id);
-      fetchData();
+      const { error } = await supabase.from(tableMap[activeTab]).delete().eq(idMap[activeTab], id);
+      
+      if (!error) {
+        // [LOG] Catat Penghapusan Data Master
+        await logActivity(
+          'DELETE_MASTER_DATA', 
+          // @ts-ignore
+          tableMap[activeTab], 
+          id, 
+          { deleted_id: id, source: activeTab }
+        );
+        
+        fetchData();
+      }
     }
   };
 
@@ -207,7 +271,7 @@ export default function SettingsPage() {
                 ))}
               </div>
           ) : (
-              // TAMPILAN JIKA DATABASE KOSONG (FITUR BARU)
+              // TAMPILAN JIKA DATABASE KOSONG
               <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-[2rem] p-12 text-center space-y-6">
                   <div className="mx-auto bg-slate-200 w-16 h-16 rounded-full flex items-center justify-center text-slate-500">
                       <Sliders size={32} />

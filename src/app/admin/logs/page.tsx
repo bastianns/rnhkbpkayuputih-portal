@@ -4,53 +4,107 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   History, 
-  UserCheck, 
-  ShieldAlert, 
   Database, 
   Clock, 
   User, 
   Info,
   Activity,
-  Loader2
+  Loader2,
+  ShieldAlert
 } from 'lucide-react';
 
+// Definisi Tipe Data (Interface) agar coding lebih aman & autocomplete jalan
+interface AuditLog {
+  id_audit: string;
+  actor_id: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  old_data: any; // jsonb
+  new_data: any; // jsonb
+  created_at: string;
+  // Relasi Join (Virtual) dari Supabase
+  anggota?: {
+    nama_lengkap: string;
+  } | null;
+}
+
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchLogs() {
-      // 1. AMBIL LOG & JOIN DENGAN TABEL ANGGOTA
-      // Mengambil actor_id yang berelasi dengan id_anggota untuk mendapatkan nama_lengkap
-      const { data, error } = await supabase
-        .from('audit_log')
-        .select(`
-          *,
-          actor:actor_id (
-            nama_lengkap
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      try {
+        // [UPDATE PENTING] 
+        // Syntax ini memberitahu Supabase: "Gunakan kolom actor_id untuk join ke tabel anggota"
+        const { data, error } = await supabase
+          .from('audit_log')
+          .select(`
+            *,
+            anggota:actor_id (
+              nama_lengkap
+            )
+          `)
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-      if (!error && data) {
-        setLogs(data);
+        if (error) {
+            console.error("Error fetching logs:", error.message);
+        }
+
+        if (data) {
+          // Casting data ke tipe AuditLog agar aman
+          setLogs(data as any);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     fetchLogs();
   }, []);
 
-  // 2. LOGIKA RENDER DETAIL MANUSIAWI
-  const renderDetails = (log: any) => {
-    if (log.action === 'OPEN_ATTENDANCE') return `Membuka gerbang absensi untuk kegiatan: ${log.entity_id.slice(0,8)}...`;
-    if (log.action === 'CLOSE_ATTENDANCE') return `Menutup gerbang absensi untuk kegiatan: ${log.entity_id.slice(0,8)}...`;
-    if (log.action === 'INSERT') return `Menambahkan data baru pada tabel ${log.entity.toUpperCase()}`;
-    if (log.action === 'DELETE') return `Menghapus data dari tabel ${log.entity.toUpperCase()}`;
-    if (log.action === 'RESOLVE_DEDUP') return `Melakukan resolusi duplikasi data jemaat`;
+  // --- LOGIKA RENDER DETAIL MANUSIAWI ---
+  const renderDetails = (log: AuditLog) => {
+    const action = log.action;
     
-    return log.details || `Aktivitas pada entitas ${log.entity}`;
+    // 1. Logika Absensi/Event
+    if (action.includes('ATTENDANCE')) {
+       return log.entity_id 
+        ? `Event ID: ${log.entity_id.slice(0, 8)}...`
+        : 'Update status absensi';
+    }
+
+    // 2. Logika Deduplikasi (RESOLVE)
+    if (action === 'RESOLVE_DEDUP') {
+      const decision = log.new_data?.decision || 'Unknown';
+      return `Resolusi Duplikat: ${decision.toUpperCase()}`;
+    }
+
+    // 3. Logika Deduplikasi (REGISTER FLAGGED / KARANTINA)
+    if (action === 'REGISTER_FLAGGED') {
+      return `Deteksi Duplikat (Score: ${log.new_data?.score ?? 0})`;
+    }
+    
+    // 4. Logika Register Sukses
+    if (action === 'REGISTER_SUCCESS') {
+      return `Pendaftaran Anggota Baru Berhasil`;
+    }
+
+    // 5. Logika Insert/Update Umum (Fallback ke JSON new_data)
+    if (log.new_data) {
+      // Coba cari field nama atau status untuk ditampilkan sebagai preview
+      const preview = log.new_data.nama_lengkap || log.new_data.nama_kategori || log.new_data.status || 'Data Record';
+      
+      if (action === 'INSERT') return `Menambah data: "${preview}"`;
+      if (action === 'UPDATE') return `Update data: "${preview}"`;
+    }
+    
+    // Fallback Terakhir
+    return `Interaksi pada entitas ${log.entity}`;
   };
 
   if (loading) return (
@@ -63,7 +117,7 @@ export default function AuditLogsPage() {
   return (
     <div className="p-10 space-y-10 bg-[#f6f7f8] min-h-screen font-sans text-left">
       
-      {/* Header Halaman Premium */}
+      {/* Header Halaman */}
       <div className="flex flex-col gap-2 text-left">
         <div className="flex items-center gap-2 text-[#1e40af] mb-1">
           <Activity size={20} className="animate-pulse" />
@@ -73,7 +127,7 @@ export default function AuditLogsPage() {
         <p className="text-sm font-bold text-[#4e7397] uppercase tracking-widest opacity-60 italic">Integritas Data Keanggotaan Terverifikasi.</p>
       </div>
 
-      {/* Ringkasan Aktivitas (Metrics) */}
+      {/* Metrics Cards (Statistik) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <LogStat 
           icon={<History className="text-blue-600" />} 
@@ -83,16 +137,16 @@ export default function AuditLogsPage() {
         <LogStat 
           icon={<Database className="text-green-600" />} 
           label="Perubahan Master" 
-          value={logs.filter(l => ['INSERT', 'DELETE'].includes(l.action)).length} 
+          value={logs.filter(l => ['INSERT', 'DELETE', 'UPDATE', 'RESOLVE_DEDUP'].includes(l.action)).length} 
         />
         <LogStat 
           icon={<ShieldAlert className="text-amber-600" />} 
-          label="Kontrol Event" 
-          value={logs.filter(l => l.action.includes('ATTENDANCE')).length} 
+          label="Kontrol Event & Risk" 
+          value={logs.filter(l => l.action.includes('ATTENDANCE') || l.entity === 'quarantine').length} 
         />
       </div>
 
-      {/* Tabel Log Aktivitas Premium */}
+      {/* Tabel Log Aktivitas */}
       <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -101,19 +155,20 @@ export default function AuditLogsPage() {
                 <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Waktu & Sesi</th>
                 <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aktor Administratif</th>
                 <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aksi Sistem</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Detail Perubahan Data</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Detail & Integritas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {logs.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-8 py-20 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest italic opacity-30">
-                    Belum ada riwayat aktivitas terekam dalam basis data.
+                    Belum ada riwayat aktivitas terekam.
                   </td>
                 </tr>
               ) : (
                 logs.map((log) => (
                   <tr key={log.id_audit} className="hover:bg-slate-50/80 transition-all group">
+                    {/* Kolom 1: Waktu */}
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
                         <Clock size={14} className="text-slate-300" />
@@ -124,31 +179,49 @@ export default function AuditLogsPage() {
                         </span>
                       </div>
                     </td>
+
+                    {/* Kolom 2: Aktor (Join Table) */}
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
                         <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
                           <User size={14} />
                         </div>
-                        <span className="font-black text-xs text-[#0f172a] uppercase tracking-tight">
-                          {log.actor?.nama_lengkap || 'System Auto'}
-                        </span>
+                        <div className="flex flex-col">
+                          {/* [UPDATE] Handle kalau aktor-nya NULL (System Auto) atau relasi tidak ketemu */}
+                          <span className="font-black text-xs text-[#0f172a] uppercase tracking-tight">
+                            {log.anggota?.nama_lengkap || 'System Automation'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                             {log.actor_id ? log.actor_id.slice(0,8) : 'AUTO-PROCESS'}
+                          </span>
+                        </div>
                       </div>
                     </td>
+
+                    {/* Kolom 3: Action Tag (Warna-warni) */}
                     <td className="px-8 py-6">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${
-                        log.action.includes('OPEN') ? 'bg-emerald-50 text-emerald-600' :
+                        log.action.includes('SUCCESS') ? 'bg-emerald-50 text-emerald-600' :
+                        log.action.includes('FLAGGED') ? 'bg-amber-50 text-amber-600' :
                         log.action.includes('DELETE') ? 'bg-red-50 text-red-600' :
                         'bg-blue-50 text-blue-600'
                       }`}>
-                        {log.action}
+                        {log.action.replace('_', ' ')}
                       </span>
                     </td>
+
+                    {/* Kolom 4: Detail Data */}
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2">
                         <Info size={14} className="text-slate-300" />
-                        <p className="text-xs font-bold text-[#4e7397] uppercase tracking-tighter">
-                          {renderDetails(log)}
-                        </p>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                                {log.entity}
+                            </span>
+                            <p className="text-xs font-bold text-[#4e7397] uppercase tracking-tighter">
+                            {renderDetails(log)}
+                            </p>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -162,7 +235,7 @@ export default function AuditLogsPage() {
   );
 }
 
-// Sub-komponen Stat Card Premium
+// Sub-komponen Stat
 function LogStat({ icon, label, value }: any) {
   return (
     <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6 group hover:border-[#1e40af]/20 transition-all">

@@ -15,6 +15,7 @@ import {
 /**
  * LoginPage: Pintu masuk utama sistem SSOT RNHKBP Kayu Putih.
  * Mengintegrasikan Supabase Auth dengan tabel public.anggota dan public.audit_log.
+ * Diperbarui untuk mendukung RBAC (Internal vs Non-Internal Admin).
  */
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -44,53 +45,63 @@ export default function LoginPage() {
 
     try {
       // 2. Logika Redirection & Validasi Berdasarkan Skema Database
-      
-      // CASE A: Login sebagai Administrator (Filter Domain Khusus)
+      // Mengambil data role dan status verifikasi dari tabel anggota
+      const { data: member, error: dbError } = await supabase
+        .from('anggota')
+        .select('id_anggota, nama_lengkap, is_verified, role')
+        .eq('id_anggota', userId)
+        .single();
+
+      if (dbError || !member) {
+        setError("Profil Anda tidak ditemukan di Master Records.");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      // Memeriksa status verifikasi (Vetting Status)
+      if (member.is_verified === false) {
+        setError("Akun Anda sedang dalam status Quarantine (Menunggu verifikasi Admin).");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      // 3. CASE A: Login sebagai Administrator (Domain @rnhkbp.com & Role check)
       if (authData.user?.email?.endsWith('@rnhkbp.com')) {
-        // Mencatat aktivitas ke public.audit_log sesuai skema
+        // Simpan role ke localStorage agar bisa dibaca oleh halaman Queue/Logs
+        localStorage.setItem('user_role', member.role || 'VIEWER');
+
+        // Mencatat aktivitas login admin ke audit_log
         await supabase.from('audit_log').insert({
           actor_id: userId,
           action: 'ADMIN_LOGIN',
           entity: 'system_access',
           entity_id: userId,
-          new_data: { login_at: new Date().toISOString(), role: 'admin' }
+          new_data: { 
+            login_at: new Date().toISOString(), 
+            role: member.role,
+            access_type: member.role === 'ADMIN_INTERNAL' ? 'FULL_CONTROL' : 'VIEW_ONLY' 
+          }
         });
 
         router.push('/admin');
       } 
       
-      // CASE B: Login sebagai Anggota (Verifikasi Keberadaan & Status Vetting)
+      // CASE B: Login sebagai Anggota Biasa
       else {
-        const { data: member, error: dbError } = await supabase
-          .from('anggota')
-          .select('id_anggota, nama_lengkap, is_verified')
-          .eq('id_anggota', userId) // Mencocokkan UUID Auth dengan Primary Key anggota
-          .single();
+        // Simpan role sebagai jemaat
+        localStorage.setItem('user_role', 'MEMBER');
 
-        if (dbError || !member) {
-          setError("Profil Anda tidak ditemukan di Master Records.");
-          await supabase.auth.signOut();
-        } 
-        
-        // Memeriksa kolom is_verified (Vetting Status dari Deduplication Queue)
-        else if (member.is_verified === false) {
-          setError("Akun Anda sedang dalam status Quarantine (Menunggu verifikasi Admin).");
-          await supabase.auth.signOut();
-        } 
-        
-        // Akses Diberikan
-        else {
-          // Mencatat keberhasilan akses ke public.audit_log
-          await supabase.from('audit_log').insert({
-            actor_id: member.id_anggota,
-            action: 'MEMBER_LOGIN',
-            entity: 'anggota',
-            entity_id: member.id_anggota,
-            new_data: { name: member.nama_lengkap, status: 'verified' }
-          });
+        await supabase.from('audit_log').insert({
+          actor_id: member.id_anggota,
+          action: 'MEMBER_LOGIN',
+          entity: 'anggota',
+          entity_id: member.id_anggota,
+          new_data: { name: member.nama_lengkap, status: 'verified' }
+        });
 
-          router.push(`/dashboard/${member.id_anggota}`);
-        }
+        router.push(`/dashboard/${member.id_anggota}`);
       }
     } catch (err: any) {
       setError("Terjadi kesalahan sinkronisasi sistem.");

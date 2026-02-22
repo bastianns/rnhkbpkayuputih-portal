@@ -13,9 +13,8 @@ import {
 } from 'lucide-react';
 
 /**
- * LoginPage: Pintu masuk utama sistem SSOT RNHKBP Kayu Putih.
- * Mengintegrasikan Supabase Auth dengan tabel public.anggota dan public.audit_log.
- * Diperbarui untuk mendukung RBAC (Internal vs Non-Internal Admin).
+ * LoginPage: Gerbang utama SSOT RNHKBP Kayu Putih.
+ * Memisahkan alur login Admin (@rnhkbp.com) dan Anggota biasa.
  */
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,7 +28,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // 1. Proses Autentikasi melalui Supabase Auth Service
+    // 1. Autentikasi melalui Supabase Auth Service
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -42,37 +41,17 @@ export default function LoginPage() {
     }
 
     const userId = authData.user?.id;
+    const userEmail = authData.user?.email || '';
+    const isSystemAdmin = userEmail.endsWith('@rnhkbp.com');
 
     try {
-      // 2. Logika Redirection & Validasi Berdasarkan Skema Database
-      // Mengambil data role dan status verifikasi dari tabel anggota
-      const { data: member, error: dbError } = await supabase
-        .from('anggota')
-        .select('id_anggota, nama_lengkap, is_verified, role')
-        .eq('id_anggota', userId)
-        .single();
+      // 2. ALUR LOGIN A: ADMINISTRATOR (@rnhkbp.com)
+      if (isSystemAdmin) {
+        // Menetapkan role default (Admin Internal mendapatkan Full Control)
+        const role = 'ADMIN_INTERNAL'; 
+        localStorage.setItem('user_role', role);
 
-      if (dbError || !member) {
-        setError("Profil Anda tidak ditemukan di Master Records.");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // Memeriksa status verifikasi (Vetting Status)
-      if (member.is_verified === false) {
-        setError("Akun Anda sedang dalam status Quarantine (Menunggu verifikasi Admin).");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // 3. CASE A: Login sebagai Administrator (Domain @rnhkbp.com & Role check)
-      if (authData.user?.email?.endsWith('@rnhkbp.com')) {
-        // Simpan role ke localStorage agar bisa dibaca oleh halaman Queue/Logs
-        localStorage.setItem('user_role', member.role || 'VIEWER');
-
-        // Mencatat aktivitas login admin ke audit_log
+        // Pencatatan Audit Trail untuk pertanggungjawaban akses
         await supabase.from('audit_log').insert({
           actor_id: userId,
           action: 'ADMIN_LOGIN',
@@ -80,30 +59,52 @@ export default function LoginPage() {
           entity_id: userId,
           new_data: { 
             login_at: new Date().toISOString(), 
-            role: member.role,
-            access_type: member.role === 'ADMIN_INTERNAL' ? 'FULL_CONTROL' : 'VIEW_ONLY' 
+            role: role,
+            access_type: 'FULL_CONTROL' 
           }
         });
 
         router.push('/admin');
-      } 
-      
-      // CASE B: Login sebagai Anggota Biasa
-      else {
-        // Simpan role sebagai jemaat
-        localStorage.setItem('user_role', 'MEMBER');
-
-        await supabase.from('audit_log').insert({
-          actor_id: member.id_anggota,
-          action: 'MEMBER_LOGIN',
-          entity: 'anggota',
-          entity_id: member.id_anggota,
-          new_data: { name: member.nama_lengkap, status: 'verified' }
-        });
-
-        router.push(`/dashboard/${member.id_anggota}`);
+        return;
       }
-    } catch (err: any) {
+
+      // 3. ALUR LOGIN B: ANGGOTA (Jemaat)
+      // Mencari data di Master Records (tabel anggota)
+      const { data: member, error: dbError } = await supabase
+        .from('anggota')
+        .select('id_anggota, nama_lengkap, is_verified, role')
+        .eq('id_anggota', userId)
+        .single();
+
+      // Penanganan error jika profil tidak ditemukan
+      if (dbError || !member) {
+        setError("Profil Anda tidak ditemukan di Master Records.");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      // Validasi Vetting Status (Mencegah akses jika masih dalam Quarantine)
+      if (member.is_verified === false) {
+        setError("Akun Anda dalam status Quarantine (Menunggu verifikasi).");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      // Menyimpan role Member dan mencatat aktivitas
+      localStorage.setItem('user_role', 'MEMBER');
+      await supabase.from('audit_log').insert({
+        actor_id: member.id_anggota,
+        action: 'MEMBER_LOGIN',
+        entity: 'anggota',
+        entity_id: member.id_anggota,
+        new_data: { name: member.nama_lengkap, status: 'verified' }
+      });
+
+      router.push(`/dashboard/${member.id_anggota}`);
+
+    } catch (err) {
       setError("Terjadi kesalahan sinkronisasi sistem.");
       await supabase.auth.signOut();
     } finally {
@@ -114,16 +115,13 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen bg-[#f6f7f8] flex items-center justify-center p-6 font-sans overflow-hidden">
       
-      {/* Ornamen Latar Belakang (Branding SSOT) */}
+      {/* Ornamen Latar Belakang */}
       <div className="absolute inset-0 z-0 opacity-40 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(#d0dbe7_1px,transparent_1px)] [background-size:32px_32px]"></div>
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-200/30 blur-[120px] rounded-full"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-300/20 blur-[120px] rounded-full"></div>
       </div>
 
       <div className="relative z-10 max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500">
         
-        {/* Header Identitas Portal */}
         <div className="text-center space-y-2">
           <div className="inline-flex p-3 bg-[#197fe6] rounded-2xl shadow-xl shadow-blue-100 mb-4">
             <ShieldCheck className="text-white" size={32} />
@@ -136,11 +134,9 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Kartu Formulir Login */}
         <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-white">
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
-              {/* Input Email */}
               <div className="space-y-2 text-left">
                 <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-[0.2em] ml-1">
                   Email Address
@@ -158,7 +154,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Input Password */}
               <div className="space-y-2 text-left">
                 <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-[0.2em] ml-1">
                   Secure Password
@@ -177,7 +172,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Pesan Feedback (Error) */}
             {error && (
               <div className="flex items-center gap-2 p-3 bg-red-50 rounded-xl border border-red-100 animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="text-red-500 shrink-0" size={16} />
@@ -187,7 +181,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Tombol Aksi */}
             <button 
               type="submit" 
               disabled={loading}
@@ -202,13 +195,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Informasi Footer */}
         <div className="text-center space-y-1">
           <p className="text-[10px] text-[#4e7397] font-black uppercase tracking-[0.2em]">
             &copy; {new Date().getFullYear()} RNHKBP Kayu Putih
-          </p>
-          <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest italic leading-relaxed">
-            Data Integrity & Membership Management — Milestone 3
           </p>
         </div>
       </div>

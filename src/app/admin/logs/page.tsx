@@ -7,16 +7,16 @@ import {
   Database, 
   Clock, 
   User, 
-  Info,
   Activity,
   Loader2,
   ShieldAlert,
   Search,
-  ArrowRight,
-  Eye
+  RefreshCcw,
+  Eye,
+  LogIn,
+  CheckSquare
 } from 'lucide-react';
 
-// Definisi Tipe Data agar sinkron dengan skema database PostgreSQL
 interface AuditLog {
   id_audit: string;
   actor_id: string | null;
@@ -26,7 +26,6 @@ interface AuditLog {
   old_data: any; 
   new_data: any; 
   created_at: string;
-  // Relasi Join dari tabel anggota
   anggota?: {
     nama_lengkap: string;
   } | null;
@@ -38,10 +37,6 @@ export default function AuditLogsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
 
-  /**
-   * Mengambil data audit log dengan join ke tabel anggota.
-   * Dibatasi 50 rekam terbaru untuk performa awal (SSOT).
-   */
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
@@ -54,14 +49,13 @@ export default function AuditLogsPage() {
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (filterAction !== 'ALL') {
         query = query.eq('action', filterAction);
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
       setLogs(data as any || []);
     } catch (err: any) {
@@ -75,167 +69,126 @@ export default function AuditLogsPage() {
     fetchLogs();
   }, [fetchLogs]);
 
-  // --- LOGIKA INTERPRETASI DATA (MANUSIAWI) ---
+  /**
+   * Interpretasi Aksi untuk mendukung akuntabilitas SSOT
+   */
   const renderDetails = (log: AuditLog) => {
-    const { action, new_data, old_data, entity } = log;
+    const { action, new_data, entity } = log;
     
-    // 1. Integrasi Jalur Integritas Data (Deduplikasi)
-    if (action === 'RESOLVE_DEDUP') {
-      const decision = new_data?.decision || 'PROSES';
-      const name = new_data?.subject_name || 'Jemaat';
-      return (
-        <span className="flex items-center gap-1">
-          {decision === 'MERGE' ? 'Penggabungan Data' : 'Verifikasi Baru'} : <strong>{name}</strong>
-        </span>
-      );
+    switch (action) {
+      case 'ADMIN_LOGIN':
+        return `Administrator masuk ke sistem (Role: ${new_data?.role || 'ADMIN'})`;
+      case 'MEMBER_LOGIN':
+        return `Anggota "${new_data?.name || 'Jemaat'}" berhasil masuk portal`;
+      case 'MEMBER_CHECKIN':
+        return `Melakukan check-in kehadiran pada kegiatan`;
+      case 'RESOLVE_DEDUP':
+        return `${new_data?.decision === 'MERGE' ? 'Penggabungan' : 'Verifikasi'} identitas: ${new_data?.subject_name}`;
+      case 'REGISTER_FLAGGED':
+        return `Sistem mendeteksi potensi duplikat (Skor: ${new_data?.score})`;
+      case 'INSERT':
+      case 'UPDATE':
+        return `${action === 'INSERT' ? 'Penambahan' : 'Pembaruan'} pada entitas ${entity}`;
+      default:
+        return `Aktivitas pada sistem ${entity}`;
     }
-
-    // 2. Jalur User Experience & Hukum (UU PDP/Register)
-    if (action === 'REGISTER_FLAGGED') {
-      return `Deteksi Duplikat Sistem (Skor: ${new_data?.score || 0})`;
-    }
-
-    if (action === 'INSERT' || action === 'UPDATE') {
-      const target = new_data?.nama_lengkap || new_data?.nama_kategori || entity;
-      return `${action === 'INSERT' ? 'Penambahan' : 'Pembaruan'} pada "${target}"`;
-    }
-    
-    return `Interaksi pada sistem ${entity}`;
   };
 
-  // Filter log berdasarkan pencarian (nama aktor atau aksi)
   const filteredLogs = logs.filter(log => 
     log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.anggota?.nama_lengkap?.toLowerCase().includes(searchTerm.toLowerCase())
+    log.anggota?.nama_lengkap?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    log.entity.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#f6f7f8]">
-      <Loader2 className="animate-spin text-[#1e40af] mb-4" size={40} />
-      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Sinkronisasi Log Akuntabilitas...</p>
+      <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Sinkronisasi Audit Trail...</p>
     </div>
   );
 
   return (
     <div className="p-8 space-y-8 bg-[#f6f7f8] min-h-screen font-sans text-left">
-      
-      {/* Header & UU PDP Compliance Tag */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-[#1e40af] mb-1">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-blue-600 mb-1">
             <Activity size={18} className="animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em]">Audit Trail & Governance</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em]">Governance & Audit</span>
           </div>
-          <h1 className="text-3xl font-black text-[#0f172a] uppercase tracking-tight">System Audit Logs</h1>
-          <p className="text-sm font-medium text-slate-500 italic">Menjamin transparansi setiap perubahan data sesuai standar UU PDP.</p>
+          <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">System Logs</h1>
+          <p className="text-xs font-medium text-slate-500 italic uppercase">Log akuntabilitas sesuai standar UU PDP No. 27 Tahun 2022.</p>
         </div>
         
-        {/* Kontrol Pencarian */}
         <div className="flex gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
-              placeholder="Cari Aktor/Aksi..." 
+              placeholder="Cari aktor atau aksi..." 
               className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none w-64 shadow-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <select 
-            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold shadow-sm outline-none"
-            value={filterAction}
-            onChange={(e) => setFilterAction(e.target.value)}
+          <button 
+            onClick={fetchLogs}
+            className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
           >
-            <option value="ALL">Semua Aksi</option>
-            <option value="RESOLVE_DEDUP">Resolusi Duplikat</option>
-            <option value="INSERT">Data Baru</option>
-            <option value="UPDATE">Pembaruan</option>
-          </select>
+            <RefreshCcw size={18} className="text-slate-600" />
+          </button>
         </div>
       </div>
 
-      {/* Metrics Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <LogStat icon={<History className="text-blue-600" />} label="Total Records" value={logs.length} />
-        <LogStat icon={<Database className="text-green-600" />} label="Integritas SSOT" value={logs.filter(l => l.action === 'RESOLVE_DEDUP').length} />
-        <LogStat icon={<ShieldAlert className="text-amber-600" />} label="Peringatan Risiko" value={logs.filter(l => l.action.includes('FLAGGED')).length} />
+        <LogStat icon={<LogIn className="text-green-600" />} label="Sesi Login" value={logs.filter(l => l.action.includes('LOGIN')).length} />
+        <LogStat icon={<CheckSquare className="text-purple-600" />} label="Check-In" value={logs.filter(l => l.action === 'MEMBER_CHECKIN').length} />
+        <LogStat icon={<ShieldAlert className="text-amber-600" />} label="Deduplikasi" value={logs.filter(l => l.action === 'RESOLVE_DEDUP').length} />
       </div>
 
-      {/* Main Table View */}
-      <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-[2.5rem] shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Waktu Transaksi</th>
-                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aktor Pelaksana</th>
-                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aksi Sistem</th>
-                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Detail Perubahan</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Waktu</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aktor</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Aksi</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Deskripsi Aktivitas</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 text-[11px] font-bold">
               {filteredLogs.map((log) => (
-                <tr key={log.id_audit} className="hover:bg-blue-50/20 transition-all group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-2 text-slate-500">
+                <tr key={log.id_audit} className="hover:bg-slate-50/50 transition-all group">
+                  <td className="px-8 py-5 text-slate-500">
+                    <div className="flex items-center gap-2">
                       <Clock size={12} />
-                      <span className="text-[11px] font-bold">
-                        {new Date(log.created_at).toLocaleString('id-ID', { 
-                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
-                        })}
-                      </span>
+                      {new Date(log.created_at).toLocaleString('id-ID', { 
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                      })}
                     </div>
                   </td>
-
                   <td className="px-8 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200">
-                        <User size={14} />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="font-black text-xs text-[#0f172a] uppercase tracking-tight">
-                          {log.anggota?.nama_lengkap || 'System/Auto'}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-mono">
-                           {log.actor_id ? log.actor_id.slice(0,8) : 'SISTEM-INTERNAL'}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-slate-300" />
+                      <span className="text-slate-900 uppercase">{log.anggota?.nama_lengkap || 'System/Admin'}</span>
                     </div>
                   </td>
-
                   <td className="px-8 py-5">
-                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border ${
-                      log.action === 'RESOLVE_DEDUP' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                      log.action.includes('REGISTER') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                      'bg-slate-50 text-slate-600 border-slate-100'
-                    }`}>
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] uppercase tracking-tighter">
                       {log.action.replace('_', ' ')}
                     </span>
                   </td>
-
-                  <td className="px-8 py-5">
-                    <div className="flex items-center justify-between group/detail">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{log.entity}</span>
-                        <p className="text-xs font-bold text-[#4e7397] uppercase tracking-tighter">
-                          {renderDetails(log)}
-                        </p>
-                      </div>
-                      {/* Tombol Inspeksi JSON (Opsional untuk Admin Teknis) */}
-                      <button className="opacity-0 group-hover/detail:opacity-100 p-2 hover:bg-white rounded-lg transition-all text-slate-400 hover:text-blue-600">
-                        <Eye size={14} />
-                      </button>
-                    </div>
+                  <td className="px-8 py-5 text-slate-600 italic">
+                    {renderDetails(log)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {filteredLogs.length === 0 && (
-            <div className="py-20 text-center text-slate-300">
-              <History size={48} className="mx-auto mb-2 opacity-20" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Tidak ada aktivitas ditemukan</p>
+            <div className="py-20 text-center opacity-30 uppercase font-black tracking-widest text-[10px]">
+              Belum ada aktivitas terekam
             </div>
           )}
         </div>
@@ -246,11 +199,11 @@ export default function AuditLogsPage() {
 
 function LogStat({ icon, label, value }: any) {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5 hover:border-blue-200 transition-all">
+    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
       <div className="p-3 bg-slate-50 rounded-2xl">{icon}</div>
-      <div className="text-left">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">{label}</p>
-        <p className="text-2xl font-black text-[#0f172a] leading-none">{value}</p>
+      <div>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+        <p className="text-2xl font-black text-slate-900 leading-none">{value}</p>
       </div>
     </div>
   );

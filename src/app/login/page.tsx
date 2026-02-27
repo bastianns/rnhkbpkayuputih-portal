@@ -1,112 +1,100 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
-  Lock, 
   Mail, 
+  Lock, 
   Loader2, 
   ArrowRight, 
   ShieldCheck, 
-  AlertCircle 
+  AlertCircle,
+  Send
 } from 'lucide-react';
 
-/**
- * LoginPage: Gerbang utama SSOT RNHKBP Kayu Putih.
- * Memisahkan alur login Admin (@rnhkbp.com) dan Anggota biasa.
- */
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Menangkap parameter 'next' dari URL (misal: /check-in/id-kegiatan)
+  const nextPath = searchParams.get('next') || '/';
+
+  // Deteksi peran secara dinamis berdasarkan domain email
+  const isSystemAdmin = email.toLowerCase().endsWith('@rnhkbp.com');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
-    // 1. Autentikasi melalui Supabase Auth Service
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError("Email atau Password salah.");
-      setLoading(false);
-      return;
-    }
-
-    const userId = authData.user?.id;
-    const userEmail = authData.user?.email || '';
-    const isSystemAdmin = userEmail.endsWith('@rnhkbp.com');
+    setMessage(null);
 
     try {
-      // 2. ALUR LOGIN A: ADMINISTRATOR (@rnhkbp.com)
       if (isSystemAdmin) {
-        // Menetapkan role default (Admin Internal mendapatkan Full Control)
-        const role = 'ADMIN_INTERNAL'; 
-        localStorage.setItem('user_role', role);
+        // --- ALUR A: ADMINISTRATOR (@rnhkbp.com) ---
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-        // Pencatatan Audit Trail untuk pertanggungjawaban akses
+        if (authError) {
+          setError("Kredensial Admin tidak valid.");
+          setLoading(false);
+          return;
+        }
+
+        const userId = authData.user?.id;
+
+        // Pencatatan Audit Trail
         await supabase.from('audit_log').insert({
           actor_id: userId,
           action: 'ADMIN_LOGIN',
           entity: 'system_access',
           entity_id: userId,
           new_data: { 
-            login_at: new Date().toISOString(), 
-            role: role,
-            access_type: 'FULL_CONTROL' 
+            role: 'ADMIN_INTERNAL',
+            access_type: 'FULL_CONTROL',
+            login_at: new Date().toISOString() 
           }
         });
 
-        router.push('/admin');
-        return;
+        // Redirect ke 'next' jika ada, jika tidak ke /admin
+        router.push(nextPath !== '/' ? nextPath : '/admin');
+      } else {
+        // --- ALUR B: ANGGOTA (Jemaat) ---
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            // Menyisipkan parameter 'next' ke dalam callback agar tidak looping
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${nextPath}`,
+            // GEMBOK KEAMANAN: Jangan buat user baru secara otomatis jika belum terdaftar/diverifikasi
+            shouldCreateUser: false 
+          },
+        });
+
+        if (otpError) {
+          // Tangkap error spesifik jika user tidak ditemukan di sistem (ditolak karena shouldCreateUser: false)
+          if (otpError.message.includes('Signups not allowed') || otpError.message.toLowerCase().includes('not found') || otpError.status === 400) {
+            setError("Akses Ditolak: Email belum terdaftar di SSOT atau masih dalam antrean verifikasi Admin.");
+          } else if (otpError.status === 429) {
+            setError("Terlalu banyak permintaan. Silakan tunggu 1 jam atau gunakan email lain.");
+          } else {
+            setError(otpError.message || "Gagal mengirim tautan. Pastikan email Anda sudah terdaftar dan diverifikasi.");
+          }
+          setLoading(false);
+          return;
+        }
+
+        setMessage("Tautan akses telah dikirim! Periksa kotak masuk Email atau WhatsApp Anda.");
       }
-
-      // 3. ALUR LOGIN B: ANGGOTA (Jemaat)
-      // Mencari data di Master Records (tabel anggota)
-      const { data: member, error: dbError } = await supabase
-        .from('anggota')
-        .select('id_anggota, nama_lengkap, is_verified, role')
-        .eq('id_anggota', userId)
-        .single();
-
-      // Penanganan error jika profil tidak ditemukan
-      if (dbError || !member) {
-        setError("Profil Anda tidak ditemukan di Master Records.");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // Validasi Vetting Status (Mencegah akses jika masih dalam Quarantine)
-      if (member.is_verified === false) {
-        setError("Akun Anda dalam status Quarantine (Menunggu verifikasi).");
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // Menyimpan role Member dan mencatat aktivitas
-      localStorage.setItem('user_role', 'MEMBER');
-      await supabase.from('audit_log').insert({
-        actor_id: member.id_anggota,
-        action: 'MEMBER_LOGIN',
-        entity: 'anggota',
-        entity_id: member.id_anggota,
-        new_data: { name: member.nama_lengkap, status: 'verified' }
-      });
-
-      router.push(`/dashboard/${member.id_anggota}`);
-
     } catch (err) {
       setError("Terjadi kesalahan sinkronisasi sistem.");
-      await supabase.auth.signOut();
     } finally {
       setLoading(false);
     }
@@ -114,14 +102,11 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen bg-[#f6f7f8] flex items-center justify-center p-6 font-sans overflow-hidden">
-      
-      {/* Ornamen Latar Belakang */}
       <div className="absolute inset-0 z-0 opacity-40 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(#d0dbe7_1px,transparent_1px)] [background-size:32px_32px]"></div>
       </div>
 
-      <div className="relative z-10 max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500">
-        
+      <div className="relative z-10 max-w-md w-full space-y-8 animate-in fade-in zoom-in duration-500 text-left">
         <div className="text-center space-y-2">
           <div className="inline-flex p-3 bg-[#197fe6] rounded-2xl shadow-xl shadow-blue-100 mb-4">
             <ShieldCheck className="text-white" size={32} />
@@ -137,7 +122,7 @@ export default function LoginPage() {
         <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/5 border border-white">
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
-              <div className="space-y-2 text-left">
+              <div className="space-y-2">
                 <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-[0.2em] ml-1">
                   Email Address
                 </label>
@@ -154,29 +139,40 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 text-left">
-                <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-[0.2em] ml-1">
-                  Secure Password
-                </label>
-                <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#197fe6] transition-colors" size={18} />
-                  <input 
-                    required 
-                    type="password" 
-                    placeholder="••••••••"
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#197fe6] transition-all"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+              {isSystemAdmin && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                  <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-[0.2em] ml-1">
+                    Admin Password
+                  </label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#197fe6] transition-colors" size={18} />
+                    <input 
+                      required 
+                      type="password" 
+                      placeholder="••••••••"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#197fe6] transition-all"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-xl border border-red-100 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 p-3 bg-red-50 rounded-xl border border-red-100">
                 <AlertCircle className="text-red-500 shrink-0" size={16} />
                 <p className="text-[10px] font-black text-red-500 uppercase leading-tight tracking-tight">
                   {error}
+                </p>
+              </div>
+            )}
+
+            {message && (
+              <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-100">
+                <Send className="text-green-600 shrink-0" size={16} />
+                <p className="text-[10px] font-black text-green-600 uppercase leading-tight tracking-tight">
+                  {message}
                 </p>
               </div>
             )}
@@ -189,7 +185,7 @@ export default function LoginPage() {
               {loading ? (
                 <Loader2 className="animate-spin" size={18} />
               ) : (
-                <>Masuk ke Portal <ArrowRight size={16} /></>
+                <>{isSystemAdmin ? 'Login Administrator' : 'Kirim Tautan Akses'} <ArrowRight size={16} /></>
               )}
             </button>
           </form>
@@ -197,10 +193,19 @@ export default function LoginPage() {
 
         <div className="text-center space-y-1">
           <p className="text-[10px] text-[#4e7397] font-black uppercase tracking-[0.2em]">
-            &copy; {new Date().getFullYear()} RNHKBP Kayu Putih
+            &copy; {new Date().getFullYear()} RNHKBP Kayu Putih — SSOT Project
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+// Komponen utama menggunakan Suspense karena memakai useSearchParams
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

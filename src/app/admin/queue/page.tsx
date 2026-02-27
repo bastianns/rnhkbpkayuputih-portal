@@ -20,12 +20,12 @@ import {
   AlertCircle as AlertIcon,
   Home,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  UserPlus
 } from 'lucide-react';
-import { createAuditLog } from '@/lib/audit';
 
 export default function QueuePage() {
-  const [candidates, setCandidates] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [wijkList, setWijkList] = useState<any[]>([]);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -37,39 +37,46 @@ export default function QueuePage() {
   const [userRole] = useState<'ADMIN' | 'VIEWER'>('ADMIN'); 
 
   /**
-   * Mengambil data kandidat dan metadata Wijk.
-   * Ditambahkan try-catch untuk error handling yang lebih baik.
+   * Mengambil data dari QUARANTINE sebagai sumber utama (SSOT Vetting Flow).
+   * Melakukan Join ke dedup_candidate untuk mendapatkan skor kemiripan jika ada.
    */
   const fetchData = useCallback(async () => {
     try {
+      setIsInitialLoading(true);
       setError(null);
       
       const { data: wijks, error: wijkError } = await supabase.from('wijk').select('id_wijk, nama_wijk');
       if (wijkError) throw wijkError;
       if (wijks) setWijkList(wijks);
 
-      const { data, count, error: candidateError } = await supabase
-        .from('dedup_candidate')
+      // FIX: Ambil dari quarantine_anggota agar data pendaftar baru tidak "gaib"
+      const { data, count, error: fetchError } = await supabase
+        .from('quarantine_anggota')
         .select(`
-          id_candidate, score, decision, created_at,
-          original_record:id_anggota_a (
-            id_anggota, nama_lengkap, tanggal_lahir, alamat, no_telp, 
-            id_wijk,
-            wijk:id_wijk (nama_wijk)
-          ),
-          quarantine_record:id_quarantine_b (
-            id_quarantine, raw_data
+          id_quarantine,
+          raw_data,
+          status,
+          created_at,
+          candidates:dedup_candidate!id_quarantine_b (
+            id_candidate,
+            score,
+            decision,
+            original_record:id_anggota_a (
+              id_anggota, nama_lengkap, tanggal_lahir, alamat, no_telp, 
+              id_wijk,
+              wijk:id_wijk (nama_wijk)
+            )
           )
         `, { count: 'exact' })
-        .eq('decision', 'possible')
-        .order('score', { ascending: false });
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-      if (candidateError) throw candidateError;
+      if (fetchError) throw fetchError;
       
-      setCandidates(data || []);
+      setItems(data || []);
       setStats({ pending: count || 0 });
     } catch (err: any) {
-      setError(err.message || "Gagal memuat data dari server.");
+      setError(err.message || "Gagal memuat data Vetting Center. Periksa koneksi atau RLS database.");
     } finally {
       setIsInitialLoading(false);
     }
@@ -80,49 +87,62 @@ export default function QueuePage() {
   }, [fetchData]);
 
   /**
-   * Memproses keputusan admin.
-   * Ditambahkan: Konfirmasi manual, proteksi RBAC, dan Metadata Audit Log yang detail.
+   * Memproses keputusan admin dengan penanganan dua jalur:
+   * 1. MERGE: Menggabungkan data ke rekam medis jemaat lama.
+   * 2. ACCEPT: Memverifikasi sebagai jemaat baru.
    */
-  const handleResolve = async (idCandidate: string, decision: 'ACCEPT' | 'MERGE') => {
+  const handleResolve = async (idQuarantine: string, decision: 'ACCEPT' | 'MERGE', idCandidate?: string) => {
     if (userRole === 'VIEWER') return;
 
     const actionText = decision === 'MERGE' 
       ? "menggabungkan data ini ke rekam utama (SSOT)" 
       : "memverifikasi data ini sebagai jemaat baru";
 
-    if (!window.confirm(`Apakah Anda yakin ingin ${actionText}? Tindakan ini akan memperbarui database permanen.`)) {
-      return;
-    }
+    if (!window.confirm(`Apakah Anda yakin ingin ${actionText}?`)) return;
 
-    setLoadingId(idCandidate);
+    setLoadingId(idQuarantine);
     
     try {
-      // 1. Eksekusi Resolusi di Database (RPC)
-      const { error: rpcError } = await supabase.rpc('fn_portal_resolve_dedup', {
-        p_id_candidate: idCandidate,
-        p_decision: decision
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let rpcError;
+      if (decision === 'MERGE' && idCandidate) {
+        // Gunakan RPC untuk penggabungan data
+        const { error } = await supabase.rpc('fn_portal_resolve_dedup', {
+          p_id_candidate: idCandidate,
+          p_decision: 'MERGE'
+        });
+        rpcError = error;
+      } else {
+        // Gunakan RPC sederhana untuk verifikasi jemaat baru (Accept)
+        const { error } = await supabase.rpc('fn_portal_resolve_dedup_simple', {
+          p_id_quarantine: idQuarantine,
+          p_action: 'ACCEPT'
+        });
+        rpcError = error;
+      }
 
       if (rpcError) throw rpcError;
 
-      // 2. CATAT KE AUDIT LOG (Ditambah Metadata Detail)
-      await createAuditLog(
-        'RESOLVE_DEDUP',
-        'dedup_candidate',
-        idCandidate,
-        null,
-        { 
-          decision: decision,
-          subject_name: selectedComparison.quarantine_record?.raw_data?.nama_lengkap,
-          result: decision === 'ACCEPT' ? 'NEW_VERIFIED_MEMBER' : 'UPDATED_MASTER',
-          performed_by_role: userRole
-        }
-      );
+      // Pencatatan Audit Trail
+      if (session) {
+        await supabase.from('audit_log').insert({
+          actor_id: session.user.id,
+          action: `RESOLVE_${decision}`,
+          entity: 'quarantine_anggota',
+          entity_id: idQuarantine,
+          new_data: { 
+            decision,
+            subject: selectedComparison?.raw_data?.nama_lengkap,
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
 
       await fetchData();
       setSelectedComparison(null);
     } catch (err: any) {
-      alert("Gagal memproses resolusi: " + err.message);
+      alert("Gagal memproses: " + err.message);
     } finally {
       setLoadingId(null);
     }
@@ -135,7 +155,7 @@ export default function QueuePage() {
       <div className="min-h-screen flex items-center justify-center bg-[#f6f7f8]">
         <div className="flex flex-col items-center gap-4">
           <RefreshCw className="animate-spin text-blue-600" size={40} />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Vetting Center...</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Synchronizing Vetting Data...</p>
         </div>
       </div>
     );
@@ -145,23 +165,25 @@ export default function QueuePage() {
     <div className="p-8 space-y-8 animate-in fade-in duration-500 text-left relative bg-[#f6f7f8] min-h-screen font-sans">
       {/* Header Section */}
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 text-blue-600 mb-1">
-          <ShieldCheck size={20} className="animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-[0.4em]">Identity Vetting Center</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-blue-600 mb-1">
+            <ShieldCheck size={20} className="animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em]">Identity Vetting Center</span>
+          </div>
+          <button 
+            onClick={fetchData} 
+            className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-blue-600 transition-colors"
+          >
+            <RefreshCw size={14} /> Refresh Queue
+          </button>
         </div>
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-black text-[#0e141b] tracking-tight uppercase">Deduplication Queue</h1>
             <p className="text-[#4e7397] text-base max-w-2xl leading-relaxed italic">
-              Tinjau pendaftaran jemaat yang ditahan di <strong>Quarantine</strong> untuk verifikasi identitas unik.
+              Tinjau pendaftaran jemaat yang ditahan di <strong>Quarantine</strong> untuk verifikasi identitas unik menggunakan mesin Fellegi-Sunter.
             </p>
           </div>
-          {userRole === 'VIEWER' && (
-            <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-xl border border-amber-200 flex items-center gap-2">
-              <AlertTriangle size={16} />
-              <span className="text-[10px] font-black uppercase">View Only Mode</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -199,42 +221,49 @@ export default function QueuePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {candidates.map((c) => (
-                <tr key={c.id_candidate} className="hover:bg-blue-50/30 transition-colors group">
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col gap-1 text-left">
-                      <span className="font-black text-[#0e141b] text-sm uppercase">{c.quarantine_record?.raw_data?.nama_lengkap}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">ID: {c.id_candidate.split('-')[0]}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-sm font-black text-blue-600">{Number(c.score).toFixed(2)}</span>
-                      <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(Number(c.score) * 8, 100)}%` }}></div>
+              {items.map((item) => {
+                const candidate = item.candidates?.[0]; // Ambil data kemiripan jika ditemukan
+                const score = candidate ? Number(candidate.score) : 0;
+                
+                return (
+                  <tr key={item.id_quarantine} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col gap-1 text-left">
+                        <span className="font-black text-[#0e141b] text-sm uppercase">{item.raw_data?.nama_lengkap}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">{item.raw_data?.email}</span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter ${
-                      Number(c.score) > 12 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                    }`}>
-                      {Number(c.score) > 12 ? 'High Duplicate Risk' : 'Potential Match'}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <button 
-                      onClick={() => setSelectedComparison(c)}
-                      className="px-6 py-2.5 bg-white border border-slate-200 text-[#0e141b] text-[10px] font-black rounded-xl hover:bg-[#1e40af] hover:text-white hover:border-[#1e40af] transition-all uppercase tracking-widest shadow-sm"
-                    >
-                      Bandingkan & Verifikasi
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col items-center gap-2">
+                        <span className={`text-sm font-black ${score > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                          {score > 0 ? score.toFixed(2) : '0.00 (New)'}
+                        </span>
+                        <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(score * 8, 100)}%` }}></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter ${
+                        score === 0 ? 'bg-emerald-50 text-emerald-700' : (score > 12 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700')
+                      }`}>
+                        {score === 0 ? 'Unique / Safe' : (score > 12 ? 'High Duplicate Risk' : 'Potential Match')}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      <button 
+                        onClick={() => setSelectedComparison(item)}
+                        className="px-6 py-2.5 bg-white border border-slate-200 text-[#0e141b] text-[10px] font-black rounded-xl hover:bg-[#1e40af] hover:text-white hover:border-[#1e40af] transition-all uppercase tracking-widest shadow-sm"
+                      >
+                        Bandingkan & Verifikasi
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-          {!isInitialLoading && candidates.length === 0 && (
+          {!isInitialLoading && items.length === 0 && (
             <div className="py-24 text-center space-y-4 opacity-30">
               <CheckCircle size={60} className="mx-auto text-slate-300" />
               <p className="text-sm font-black uppercase tracking-widest text-slate-400">Antrean Quarantine Bersih</p>
@@ -268,22 +297,31 @@ export default function QueuePage() {
             <div className="p-10 grid grid-cols-1 lg:grid-cols-2 gap-10 overflow-y-auto relative text-left">
               <div className="absolute left-1/2 top-10 bottom-10 w-px bg-slate-100 hidden lg:block"></div>
 
-              {/* Master Record */}
+              {/* Master Record (Jika ada kemiripan) */}
               <div className="space-y-6 text-left">
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full w-fit">
                   <DbIcon size={12} className="text-slate-500" />
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Master Record (Database)</span>
                 </div>
-                <div className="grid gap-4">
-                  <CompareField icon={<User size={18}/>} label="Nama Lengkap" value={selectedComparison.original_record?.nama_lengkap} />
-                  <CompareField icon={<Calendar size={18}/>} label="Tgl Lahir" value={selectedComparison.original_record?.tanggal_lahir} />
-                  <CompareField icon={<MapPin size={18}/>} label="Wilayah (Wijk)" value={selectedComparison.original_record?.wijk?.nama_wijk} />
-                  <CompareField icon={<Phone size={18}/>} label="Telepon" value={selectedComparison.original_record?.no_telp || 'N/A'} />
-                  <CompareField icon={<Home size={18}/>} label="Alamat" value={selectedComparison.original_record?.alamat || 'N/A'} />
-                </div>
+                {selectedComparison.candidates?.[0] ? (
+                  <div className="grid gap-4">
+                    <CompareField icon={<User size={18}/>} label="Nama Lengkap" value={selectedComparison.candidates[0].original_record?.nama_lengkap} />
+                    <CompareField icon={<Calendar size={18}/>} label="Tgl Lahir" value={selectedComparison.candidates[0].original_record?.tanggal_lahir} />
+                    <CompareField icon={<MapPin size={18}/>} label="Wilayah (Wijk)" value={selectedComparison.candidates[0].original_record?.wijk?.nama_wijk} />
+                    <CompareField icon={<Phone size={18}/>} label="Telepon" value={selectedComparison.candidates[0].original_record?.no_telp || 'N/A'} />
+                    <CompareField icon={<Home size={18}/>} label="Alamat" value={selectedComparison.candidates[0].original_record?.alamat || 'N/A'} />
+                  </div>
+                ) : (
+                  <div className="p-12 border-2 border-dashed border-slate-100 rounded-[2rem] flex flex-col items-center justify-center text-center space-y-4">
+                    <UserPlus className="text-slate-200" size={48} />
+                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest leading-relaxed">
+                      Tidak ditemukan kemiripan identitas.<br/>Record ini dianggap sebagai entitas baru.
+                    </p>
+                  </div>
+                )}
               </div>
 
-              {/* Request Pending */}
+              {/* Request Pending (Data dari Quarantine) */}
               <div className="space-y-6 text-left">
                 <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 rounded-full w-fit border border-blue-100">
                   <Clock size={12} className="text-blue-600" />
@@ -292,28 +330,28 @@ export default function QueuePage() {
                 <div className="grid gap-4">
                   <CompareField 
                     icon={<User size={18}/>} label="Nama Lengkap" 
-                    value={selectedComparison.quarantine_record.raw_data.nama_lengkap} 
-                    highlight isChanged={selectedComparison.original_record?.nama_lengkap !== selectedComparison.quarantine_record.raw_data.nama_lengkap}
+                    value={selectedComparison.raw_data.nama_lengkap} 
+                    highlight isChanged={selectedComparison.candidates?.[0]?.original_record?.nama_lengkap !== selectedComparison.raw_data.nama_lengkap}
                   />
                   <CompareField 
                     icon={<Calendar size={18}/>} label="Tgl Lahir" 
-                    value={selectedComparison.quarantine_record.raw_data.tanggal_lahir} 
-                    highlight isChanged={selectedComparison.original_record?.tanggal_lahir !== selectedComparison.quarantine_record.raw_data.tanggal_lahir}
+                    value={selectedComparison.raw_data.tanggal_lahir} 
+                    highlight isChanged={selectedComparison.candidates?.[0]?.original_record?.tanggal_lahir !== selectedComparison.raw_data.tanggal_lahir}
                   />
                   <CompareField 
                     icon={<MapPin size={18}/>} label="Wilayah (Wijk)" 
-                    value={getWijkName(selectedComparison.quarantine_record.raw_data.id_wijk)} 
-                    highlight isChanged={selectedComparison.original_record?.id_wijk !== selectedComparison.quarantine_record.raw_data.id_wijk}
+                    value={getWijkName(selectedComparison.raw_data.id_wijk)} 
+                    highlight isChanged={selectedComparison.candidates?.[0]?.original_record?.id_wijk !== selectedComparison.raw_data.id_wijk}
                   />
                   <CompareField 
                     icon={<Phone size={18}/>} label="Telepon" 
-                    value={selectedComparison.quarantine_record.raw_data.no_telp || 'N/A'} 
-                    highlight isChanged={selectedComparison.original_record?.no_telp !== selectedComparison.quarantine_record.raw_data.no_telp}
+                    value={selectedComparison.raw_data.no_telp || 'N/A'} 
+                    highlight isChanged={selectedComparison.candidates?.[0]?.original_record?.no_telp !== selectedComparison.raw_data.no_telp}
                   />
                   <CompareField 
                     icon={<Home size={18}/>} label="Alamat" 
-                    value={selectedComparison.quarantine_record.raw_data.alamat || 'N/A'} 
-                    highlight isChanged={selectedComparison.original_record?.alamat !== selectedComparison.quarantine_record.raw_data.alamat}
+                    value={selectedComparison.raw_data.alamat || 'N/A'} 
+                    highlight isChanged={selectedComparison.candidates?.[0]?.original_record?.alamat !== selectedComparison.raw_data.alamat}
                   />
                 </div>
               </div>
@@ -323,24 +361,28 @@ export default function QueuePage() {
             <div className="px-10 py-8 bg-slate-50/80 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="flex items-center gap-3 text-blue-600">
                 <div className="p-2 bg-blue-100 rounded-lg"><AlertIcon size={18} /></div>
-                <span className="text-sm font-black uppercase tracking-tighter italic">Similarity Score: {Number(selectedComparison.score).toFixed(2)} Points</span>
+                <span className="text-sm font-black uppercase tracking-tighter italic">
+                  Analysis Score: {selectedComparison.candidates?.[0] ? Number(selectedComparison.candidates[0].score).toFixed(2) : '0.00'} Points
+                </span>
               </div>
               <div className="flex gap-4 w-full md:w-auto">
                 <button 
-                  onClick={() => handleResolve(selectedComparison.id_candidate, 'ACCEPT')}
+                  onClick={() => handleResolve(selectedComparison.id_quarantine, 'ACCEPT')}
                   disabled={!!loadingId || userRole === 'VIEWER'}
                   className="flex-1 md:flex-none px-8 py-4 bg-white border border-slate-200 text-[#0e141b] text-[10px] font-black rounded-[1.2rem] hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all uppercase tracking-widest shadow-sm disabled:opacity-50"
                 >
-                  Accept as New (Verify)
+                  Verify as New Member
                 </button>
-                <button 
-                  onClick={() => handleResolve(selectedComparison.id_candidate, 'MERGE')}
-                  disabled={!!loadingId || userRole === 'VIEWER'}
-                  className="flex-1 md:flex-none px-10 py-4 bg-[#1e40af] text-white text-[10px] font-black rounded-[1.2rem] hover:bg-blue-800 transition-all uppercase tracking-widest shadow-xl shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loadingId ? <RefreshCw className="animate-spin" size={16} /> : <Merge size={16} />} 
-                  Merge & Sync Data
-                </button>
+                {selectedComparison.candidates?.[0] && (
+                  <button 
+                    onClick={() => handleResolve(selectedComparison.id_quarantine, 'MERGE', selectedComparison.candidates[0].id_candidate)}
+                    disabled={!!loadingId || userRole === 'VIEWER'}
+                    className="flex-1 md:flex-none px-10 py-4 bg-[#1e40af] text-white text-[10px] font-black rounded-[1.2rem] hover:bg-blue-800 transition-all uppercase tracking-widest shadow-xl shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {loadingId ? <RefreshCw className="animate-spin" size={16} /> : <Merge size={16} />} 
+                    Merge & Sync Data
+                  </button>
+                )}
               </div>
             </div>
           </div>

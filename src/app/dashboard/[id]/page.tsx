@@ -25,10 +25,10 @@ import {
   Lock,
   LayoutDashboard,
   MapPin,
-  Check
+  Check,
+  X,
+  UserCheck
 } from 'lucide-react';
-// INTEGRASI POIN 3: Import helper audit log
-import { createAuditLog } from '@/lib/audit';
 
 export default function MemberMobileDashboard() {
   const { id } = useParams();
@@ -37,10 +37,15 @@ export default function MemberMobileDashboard() {
   const [member, setMember] = useState<any>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [activeEvent, setActiveEvent] = useState<any>(null); // State untuk kegiatan yang sedang buka absen
+  const [activeEvent, setActiveEvent] = useState<any>(null); 
   const [loading, setLoading] = useState(true);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // --- STATE BARU UNTUK MODAL PERAN ---
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [perans, setPerans] = useState<any[]>([]);
+  const [selectedPeran, setSelectedPeran] = useState('');
 
   // Fungsi untuk menentukan level jemaat berdasarkan poin
   const getMemberLevel = (points: number) => {
@@ -52,6 +57,23 @@ export default function MemberMobileDashboard() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      // 1. Dapatkan sesi aktif saat ini
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // 2. Catat log keluar ke tabel audit_log jika sesi masih ada
+      if (session) {
+        await supabase.from('audit_log').insert({
+          actor_id: id,
+          action: 'MEMBER_LOGOUT',
+          entity: 'auth_system',
+          new_data: { 
+            name: member?.nama_lengkap, 
+            logout_at: new Date().toISOString() 
+          }
+        });
+      }
+
+      // 3. Proses Sign Out dari Supabase
       await supabase.auth.signOut();
       router.push('/login');
       router.refresh(); 
@@ -66,7 +88,7 @@ export default function MemberMobileDashboard() {
     if (!id) return;
     setLoading(true);
     try {
-      // 1. Ambil Profil & Wijk menggunakan maybeSingle agar tidak error jika kosong
+      // 1. Ambil Profil & Wijk
       const { data: profile } = await supabase
         .from('anggota')
         .select('*, wijk(id_wijk, nama_wijk)')
@@ -86,7 +108,7 @@ export default function MemberMobileDashboard() {
         .eq('id_anggota', id)
         .order('waktu_check_in', { ascending: false });
 
-      // 3. Cek apakah ada kegiatan yang sedang OPEN (maybeSingle fix)
+      // 3. Cek apakah ada kegiatan yang sedang OPEN
       const { data: liveEvent } = await supabase
         .from('kegiatan')
         .select('*')
@@ -96,12 +118,19 @@ export default function MemberMobileDashboard() {
       // 4. Ambil Leaderboard Top 3 di Wijk yang sama
       if (profile?.id_wijk) {
         const { data: topList } = await supabase
-          .from('view_leaderboard_aktif')
+          .from('view_global_wijk_leaderboard') // Disesuaikan dengan view baru
           .select('*')
           .eq('id_wijk', profile.id_wijk)
           .limit(3);
         if (topList) setLeaderboard(topList);
       }
+
+      // 5. Ambil Katalog Peran untuk Dropdown Modal
+      const { data: roles } = await supabase
+        .from('katalog_peran')
+        .select('id_peran, nama_peran')
+        .order('nama_peran');
+      if (roles) setPerans(roles);
 
       // Validasi tombol absen
       if (liveEvent) {
@@ -125,49 +154,37 @@ export default function MemberMobileDashboard() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Fungsi Absensi Sekali Klik (Pencarian Peran Dinamis + Audit Log)
+  // Fungsi Absensi (Sekarang menggunakan selectedPeran dari Modal)
   const handleConfirmAttendance = async () => {
-    if (!activeEvent || isCheckingIn) return;
+    if (!activeEvent || isCheckingIn || !selectedPeran) return;
     setIsCheckingIn(true);
 
     try {
-      // Cari ID Peran "Jemaat" secara dinamis di database
-      const { data: roleData, error: roleError } = await supabase
-        .from('katalog_peran')
-        .select('id_peran')
-        .ilike('nama_peran', '%Jemaat%')
-        .limit(1)
-        .maybeSingle();
-
-      if (roleError || !roleData) {
-        alert("Sistem Error: Peran 'Jemaat' tidak ditemukan. Pastikan sudah ditambahkan di Settings Admin.");
-        setIsCheckingIn(false);
-        return;
-      }
-
-      // Masukkan riwayat kehadiran
+      // Masukkan riwayat kehadiran dengan peran yang dipilih jemaat
       const { error } = await supabase
         .from('riwayat_partisipasi')
         .insert({
           id_anggota: id,
           id_kegiatan: activeEvent.id_kegiatan,
           waktu_check_in: new Date().toISOString(),
-          id_peran: roleData.id_peran 
+          id_peran: selectedPeran 
         });
 
       if (error) throw error;
 
-      // INTEGRASI POIN 3: CATAT AUDIT LOG KEHADIRAN
-      await createAuditLog(
-        'MEMBER_SELF_CHECKIN',
-        'riwayat_partisipasi',
-        activeEvent.id_kegiatan,
-        null,
-        { member_id: id, event_name: activeEvent.nama_kegiatan }
-      );
+      // Catat Audit Log
+      await supabase.from('audit_log').insert({
+        actor_id: id,
+        action: 'MEMBER_SELF_CHECKIN',
+        entity: 'riwayat_partisipasi',
+        entity_id: activeEvent.id_kegiatan,
+        new_data: { member_id: id, event_name: activeEvent.nama_kegiatan, role_id: selectedPeran }
+      });
       
-      setActiveEvent(null);
-      fetchDashboardData();
+      setShowRoleModal(false); // Tutup modal setelah sukses
+      setActiveEvent(null); // Sembunyikan banner event
+      setSelectedPeran(''); // Reset pilihan
+      fetchDashboardData(); // Refresh UI dan Poin
     } catch (err) {
       console.error("Gagal melakukan absensi:", err);
       alert("Terjadi kesalahan sistem saat konfirmasi kehadiran.");
@@ -189,10 +206,10 @@ export default function MemberMobileDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] font-sans antialiased selection:bg-amber-500/20">
+    <div className="min-h-screen bg-[#fcfcfd] font-sans antialiased selection:bg-amber-500/20 relative">
       
       {/* --- PREMIUM HEADER --- */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#f59e0b]/20">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-[#f59e0b]/20">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 h-20 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -236,12 +253,11 @@ export default function MemberMobileDashboard() {
                 </div>
               </div>
               <button 
-                onClick={handleConfirmAttendance}
+                onClick={() => setShowRoleModal(true)} // Memicu Modal Peran
                 disabled={isCheckingIn}
                 className="w-full md:w-auto bg-white text-[#1e40af] px-10 py-4 rounded-[16px] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl hover:bg-amber-400 hover:text-[#0f172a] transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
               >
-                {isCheckingIn ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
-                KONFIRMASI KEHADIRAN
+                <Check size={18} /> KONFIRMASI KEHADIRAN
               </button>
             </div>
           </section>
@@ -349,7 +365,7 @@ export default function MemberMobileDashboard() {
               
               <div className="flex-grow p-8 bg-[#0a0f1c] space-y-4 text-left">
                 {leaderboard.length > 0 ? leaderboard.map((user, index) => (
-                  <div key={user.id_anggota} className={`flex items-center gap-4 p-5 rounded-2xl transition-all ${user.id_anggota === id ? 'bg-blue-600/20 ring-1 ring-blue-500/50' : 'bg-white/5 hover:bg-white/10'}`}>
+                  <div key={user.id_wijk} className={`flex items-center gap-4 p-5 rounded-2xl transition-all ${index === 0 ? 'bg-amber-600/10 ring-1 ring-amber-500/30' : 'bg-white/5 hover:bg-white/10'}`}>
                     <div className="shrink-0 text-left">
                       {index === 0 && <Crown className="text-[#f59e0b]" size={28} />}
                       {index === 1 && <Medal className="text-slate-300" size={28} />}
@@ -357,14 +373,14 @@ export default function MemberMobileDashboard() {
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-bold text-white uppercase truncate text-left">
-                        {user.nama_lengkap} {user.id_anggota === id && <span className="text-[10px] text-[#1e40af] ml-2">(ANDA)</span>}
+                        {user.nama_wijk} 
                       </p>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter text-left">
-                        {user.total_kehadiran} Kegiatan Diikuti
+                        {user.total_partisipasi} Kegiatan Diikuti Warga Wijk
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-black text-[#f59e0b] leading-none">{user.total_poin}</p>
+                      <p className="text-xl font-black text-[#f59e0b] leading-none">{user.total_poin_wilayah}</p>
                       <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Pts</p>
                     </div>
                   </div>
@@ -441,14 +457,6 @@ export default function MemberMobileDashboard() {
               <p className="text-sm leading-relaxed max-w-sm mb-8 text-left text-left">
                 Sistem Satu Orang Terpadu (SSOT) untuk manajemen data partisipasi dan keanggotaan RNHKP Kayu Putih yang profesional dan transparan.
               </p>
-              <div className="flex gap-4 text-left">
-                <div className="w-10 h-10 rounded-[12px] border border-white/10 flex items-center justify-center hover:bg-white/5 cursor-pointer transition-colors text-white">
-                  <Share2 size={18} />
-                </div>
-                <div className="w-10 h-10 rounded-[12px] border border-white/10 flex items-center justify-center hover:bg-white/5 cursor-pointer transition-colors text-white">
-                  <Mail size={18} />
-                </div>
-              </div>
             </div>
             
             <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-8 text-left text-left">
@@ -461,27 +469,65 @@ export default function MemberMobileDashboard() {
                   Seluruh sistem penyimpanan data mematuhi standar keamanan sesuai UU Perlindungan Data Pribadi (PDP) Nasional.
                 </p>
               </div>
-              <div className="bg-white/5 p-6 rounded-[16px] border border-white/5 text-left">
-                <div className="flex items-center gap-3 mb-4 text-[#1e40af] text-left">
-                  <Lock size={20} />
-                  <h4 className="text-xs font-bold text-white uppercase tracking-widest text-left text-left">Integritas Sistem</h4>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-400 text-left">
-                  Keamanan berlapis dengan enkripsi tingkat lanjut untuk memastikan integritas data setiap anggota tetap terjaga.
-                </p>
-              </div>
             </div>
           </div>
-          
           <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-center text-center">
             <p className="text-[10px] text-slate-500 font-bold tracking-[0.2em] text-center">© 2024-2026 SSOT PORTAL. RNHKP KAYU PUTIH.</p>
-            <div className="flex gap-8 text-center text-center">
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em] cursor-pointer hover:text-[#f59e0b] text-center">Kebijakan Privasi</span>
-              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em] cursor-pointer hover:text-[#f59e0b] text-center">Bantuan</span>
-            </div>
           </div>
         </div>
       </footer>
+
+      {/* --- OVERLAY MODAL PILIH PERAN --- */}
+      {showRoleModal && (
+        <div className="fixed inset-0 z-[100] bg-[#0f172a]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-md p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3 text-[#1e40af]">
+                <UserCheck size={24} />
+                <h3 className="font-black text-lg uppercase tracking-tight">Peran Pelayanan</h3>
+              </div>
+              <button 
+                onClick={() => setShowRoleModal(false)}
+                className="text-slate-400 hover:text-red-500 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p className="text-xs font-bold text-slate-500 mb-6 uppercase tracking-widest">
+              Tentukan peran Anda untuk kegiatan <span className="text-amber-500">{activeEvent?.nama_kegiatan}</span>.
+            </p>
+
+            <div className="space-y-6">
+              <div className="relative">
+                <select 
+                  value={selectedPeran}
+                  onChange={(e) => setSelectedPeran(e.target.value)}
+                  className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[16px] font-black text-sm uppercase tracking-widest outline-none focus:border-[#1e40af] focus:ring-1 focus:ring-[#1e40af] transition-all appearance-none cursor-pointer text-[#0f172a]"
+                >
+                  <option value="">-- PILIH PERAN ANDA --</option>
+                  {perans.map(p => (
+                    <option key={p.id_peran} value={p.id_peran}>{p.nama_peran}</option>
+                  ))}
+                </select>
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-[#1e40af]">
+                  ▼
+                </div>
+              </div>
+
+              <button 
+                onClick={handleConfirmAttendance}
+                disabled={isCheckingIn || !selectedPeran}
+                className="w-full bg-[#1e40af] text-white py-4 rounded-[16px] font-black text-xs uppercase tracking-[0.2em] shadow-lg hover:bg-[#0f172a] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCheckingIn ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                SIMPAN & ABSEN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

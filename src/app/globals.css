@@ -1,19 +1,102 @@
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;900&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ROOT VARIABLES: Menggabungkan tema Landing Page, Admin, & Dashboard */
 :root {
   --primary: #197fe6;
-  --background-light: #f6f7f8;
+  --church-navy: #0a1f33;
+  --champagne-gold: #d4af37;
+  --soft-cream: #f9f7f2;
+  
+  --color-gold: #d4af37;
+  --color-gold-light: #f1e5ac;
+  --color-navy-dark: #0a1628;
+  --color-navy-light: #162a45;
 }
 
 body {
   font-family: 'Public Sans', sans-serif;
-  @apply bg-[#f6f7f8] text-[#0e141b] antialiased;
+  @apply bg-[#f9f7f2] text-[#0a1f33] antialiased;
 }
 
-.form-card-shadow {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+@layer utilities {
+  /* TIPOGRAFI GLOBAL */
+  .serif-font, .serif {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .gold-gradient-text {
+    background: linear-gradient(135deg, #d4af37 0%, #f1d78a 50%, #b8860b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* --- OPERA ELEGANCE CUSTOM CLASSES --- */
+  .gold-glow {
+    text-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+  }
+
+  .card-border {
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    position: relative;
+  }
+
+  .card-border::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    pointer-events: none;
+  }
+
+  .bg-mesh {
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(22, 42, 69, 0.8) 0%, transparent 70%),
+      radial-gradient(circle at 100% 100%, rgba(10, 22, 40, 1) 0%, transparent 50%);
+    background-color: #0a1628;
+  }
+
+  /* Pola Ornamen Halus (Subtle Pattern) */
+  .bg-pattern {
+    position: relative;
+  }
+
+  .bg-pattern::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%23d4af37' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* --- EFEK KHUSUS HALAMAN RIWAYAT (HISTORY NOTEBOOK) --- */
+  .ornate-border {
+    position: relative;
+    border: 2px solid var(--color-gold);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+  }
+
+  .ornate-corner {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    pointer-events: none;
+  }
+
+  /* Bayangan buku catatan agar terlihat 3D (Timbul) */
+  .notebook-shadow {
+    box-shadow: 10px 10px 30px rgba(0, 0, 0, 0.5), 
+                inset -2px 0 5px rgba(0,0,0,0.1);
+  }
+
+  /* Efek sinar/cahaya jatuh dari atas */
+  .light-ray {
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.05), transparent);
+    filter: blur(40px);
+  }
 }

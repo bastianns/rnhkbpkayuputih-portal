@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { 
-  CheckCircle, 
   Loader2, 
   AlertTriangle, 
   ShieldCheck, 
@@ -12,8 +11,11 @@ import {
   User, 
   LogOut,
   MapPin,
-  UserCheck // <-- Ditambahkan untuk icon peran
+  UserCheck
 } from 'lucide-react';
+
+// Mengimpor komponen animasi centang / stempel resmi kita
+import AnimatedCheckmark from '@/components/AnimatedCheckmark';
 
 export default function MemberAuthenticatedCheckIn() {
   const { id } = useParams(); // ID Kegiatan dari URL
@@ -204,9 +206,11 @@ export default function MemberAuthenticatedCheckIn() {
       {/* SELECTION PERAN & ACTION BUTTON */}
       {status === 'success' ? (
         <div className="p-8 bg-emerald-500 text-white rounded-[2.5rem] flex flex-col items-center text-center gap-4 animate-in zoom-in">
-          <CheckCircle size={48} />
+          {/* Implementasi Komponen AnimatedCheckmark */}
+          <AnimatedCheckmark size={64} color="#ffffff" />
+          
           <div>
-            <p className="font-black uppercase text-lg leading-none">Berhasil Teratat!</p>
+            <p className="font-black uppercase text-lg leading-none">Berhasil Tercatat!</p>
             <p className="text-[10px] font-bold opacity-80 uppercase mt-2">Data kehadiran telah disimpan secara aman di SSOT.</p>
           </div>
         </div>

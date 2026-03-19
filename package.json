@@ -11,6 +11,7 @@
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
+    "animejs": "^4.3.6",
     "katex": "^0.16.27",
     "lucide-react": "^0.562.0",
     "motion": "^12.34.3",
@@ -21,6 +22,7 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@types/animejs": "^3.1.13",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

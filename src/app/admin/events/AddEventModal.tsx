@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { X, Calendar, Tag, FileText, Loader2, Plus, Check, Undo2 } from 'lucide-react';
+
+// ── Anime.js V4 Imports ──
+import { animate, spring } from 'animejs';
 
 interface AddEventModalProps {
   isOpen: boolean;
@@ -13,6 +16,8 @@ interface AddEventModalProps {
 export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventModalProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   
   // State untuk Mode Tambah Kategori Baru
   const [isAddingNewCat, setIsAddingNewCat] = useState(false);
@@ -25,7 +30,7 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
     tanggal_mulai: ''
   });
 
-  // Fetch Kategori
+  // Fetch Kategori dari Supabase
   async function fetchCategories() {
     const { data } = await supabase
       .from('kategori_kegiatan')
@@ -34,31 +39,56 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
     if (data) setCategories(data);
   }
 
-  // Ambil kategori saat modal dibuka
+  // ── FITUR: Entry Animasi Pegas (Spring) pada Modal ──
   useEffect(() => {
     if (isOpen) {
       fetchCategories();
+      
+      // Animasikan overlay fade-in
+      if (overlayRef.current) {
+        animate(overlayRef.current, { opacity: [0, 1], duration: 400, ease: 'outExpo' });
+      }
+
+      // Animasikan Modal dengan "Tactile Spring Bounce"
+      const timer = setTimeout(() => {
+        if (modalRef.current) {
+          animate(modalRef.current, {
+            opacity: [0, 1],
+            scale: [0.75, 1],
+            y: [30, 0],
+            duration: 800,
+            ease: spring({ bounce: 0.55 }) // <-- Efek pegas yang diminta
+          });
+        }
+      }, 50);
+      
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  // --- LOGIKA 1: QUICK ADD CATEGORY ---
+  // ── FITUR: Tactile Spring Feedback untuk Tombol ──
+  const handleSpringBtn = (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => {
+    animate(e.currentTarget, {
+      scale: state === 'down' ? 0.95 : 1,
+      duration: 400,
+      ease: spring({ bounce: 0.4 })
+    });
+  };
+
+  // --- LOGIKA: QUICK ADD CATEGORY ---
   const handleQuickAddCategory = async () => {
     if (!newCategoryName.trim()) return;
     setCreatingCat(true);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
-
-      // 1. Insert Kategori Baru
       const { data: newCat, error } = await supabase
         .from('kategori_kegiatan')
-        .insert([{ nama_kategori: newCategoryName, bobot_dasar: 10 }]) // Default bobot 10
-        .select()
-        .single();
+        .insert([{ nama_kategori: newCategoryName, bobot_dasar: 10 }])
+        .select().single();
 
       if (error) throw error;
 
-      // 2. Log Audit
+      // Log Audit
       await supabase.from('audit_log').insert({
         actor_id: user?.id || null,
         action: 'INSERT_MASTER_DATA',
@@ -67,14 +97,10 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
         new_data: { nama_kategori: newCat.nama_kategori, source: 'Quick Add from Modal' }
       });
 
-      // 3. Refresh List & Auto Select
       await fetchCategories();
       setFormData({ ...formData, id_kategori_kegiatan: newCat.id_kategori_kegiatan });
-      
-      // 4. Reset UI Mode
       setIsAddingNewCat(false);
       setNewCategoryName('');
-
     } catch (err: any) {
       alert("Gagal tambah kategori: " + err.message);
     } finally {
@@ -82,14 +108,12 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
     }
   };
 
-  // --- LOGIKA 2: SUBMIT EVENT ---
+  // --- LOGIKA: SUBMIT EVENT ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
-
       const { data: newEvent, error } = await supabase
         .from('kegiatan')
         .insert([{
@@ -97,29 +121,23 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
           id_kategori_kegiatan: formData.id_kategori_kegiatan,
           tanggal_mulai: new Date(formData.tanggal_mulai).toISOString()
         }])
-        .select()
-        .single();
+        .select().single();
 
       if (error) throw error;
 
-      // Log Audit Event
       if (newEvent) {
         await supabase.from('audit_log').insert({
           actor_id: user?.id || null,
           action: 'INSERT_EVENT',
           entity: 'kegiatan',
           entity_id: newEvent.id_kegiatan,
-          new_data: {
-            nama_kegiatan: newEvent.nama_kegiatan,
-            waktu: newEvent.tanggal_mulai
-          }
+          new_data: { nama_kegiatan: newEvent.nama_kegiatan, waktu: newEvent.tanggal_mulai }
         });
       }
 
       setFormData({ nama_kegiatan: '', id_kategori_kegiatan: '', tanggal_mulai: '' });
       onSuccess();
-      onClose();
-
+      handleClose();
     } catch (error: any) {
       alert("Gagal menambah kegiatan: " + error.message);
     } finally {
@@ -127,36 +145,59 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
     }
   };
 
+  // Animasi keluar (Exit)
+  const handleClose = () => {
+    if (modalRef.current && overlayRef.current) {
+      animate(modalRef.current, { scale: 0.9, opacity: 0, duration: 200, ease: 'inExpo' });
+      animate(overlayRef.current, { opacity: 0, duration: 300, ease: 'inExpo', onComplete: onClose });
+    } else {
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-100 scale-in-center transition-all">
+    <div 
+      ref={overlayRef}
+      style={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#051122]/80 backdrop-blur-md font-sans"
+    >
+      {/* ── KONTAINER MODAL (Glassmorphism & Spring Bounce) ── */}
+      <div 
+        ref={modalRef}
+        style={{ opacity: 0, transform: 'scale(0.75)' }} // Initial state sebelum Anime.js mengambil alih
+        className="bg-[#0a192f]/70 backdrop-blur-2xl w-full max-w-md rounded-[2.5rem] shadow-[0_40px_80px_rgba(0,0,0,0.8)] overflow-hidden border border-[#C5A059]/30"
+      >
+        
         {/* Modal Header */}
-        <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white">
+        <div className="p-8 border-b border-[#C5A059]/10 flex justify-between items-center bg-white/5">
           <div className="text-left">
-            <h2 className="text-lg font-black text-[#0e141b] uppercase tracking-tighter">Tambah Kegiatan</h2>
-            <p className="text-[10px] font-bold text-[#4e7397] uppercase tracking-widest">Penjadwalan Baru</p>
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter italic">Tambah Kegiatan</h2>
+            <p className="text-[9px] font-bold text-[#C5A059] uppercase tracking-[0.2em] mt-1">Penjadwalan Operasional Baru</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+          <button 
+            onClick={handleClose} 
+            className="p-3 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 relative z-10">
+          <div className="space-y-5">
             
             {/* Input Nama Kegiatan */}
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-widest flex items-center gap-2">
-                <FileText size={12} /> Nama Kegiatan
+              <label className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest flex items-center gap-2">
+                <FileText size={14} className="text-white/30" /> Nama Kegiatan
               </label>
               <input
                 required
                 type="text"
-                placeholder="Contoh: Ibadah Minggu Raya"
-                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-[#197fe6] focus:bg-white rounded-xl text-sm font-bold outline-none transition-all"
+                placeholder="Contoh: Ibadah Pemuda"
+                className="w-full px-4 py-4 bg-[#051122]/50 border border-[#C5A059]/20 focus:border-[#C5A059] rounded-xl text-sm font-bold text-white outline-none transition-all placeholder:text-white/20 shadow-inner"
                 value={formData.nama_kegiatan}
                 onChange={(e) => setFormData({...formData, nama_kegiatan: e.target.value})}
               />
@@ -165,38 +206,35 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
             {/* Select Kategori dengan Fitur Quick Add */}
             <div className="space-y-2 text-left">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-widest flex items-center gap-2">
-                  <Tag size={12} /> Kategori
+                <label className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest flex items-center gap-2">
+                  <Tag size={14} className="text-white/30" /> Kategori
                 </label>
-                
-                {/* Tombol Toggle Mode */}
                 {!isAddingNewCat ? (
                   <button 
                     type="button" 
                     onClick={() => setIsAddingNewCat(true)}
-                    className="text-[10px] font-bold text-[#197fe6] hover:underline flex items-center gap-1"
+                    className="text-[9px] font-bold text-[#C5A059] hover:text-white transition-colors flex items-center gap-1 uppercase tracking-widest"
                   >
-                    <Plus size={10} /> Buat Baru
+                    <Plus size={12} /> Buat Baru
                   </button>
                 ) : (
                    <button 
                     type="button" 
                     onClick={() => setIsAddingNewCat(false)}
-                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"
+                    className="text-[9px] font-bold text-white/40 hover:text-white transition-colors flex items-center gap-1 uppercase tracking-widest"
                   >
-                    <Undo2 size={10} /> Batal
+                    <Undo2 size={12} /> Batal
                   </button>
                 )}
               </div>
 
               {isAddingNewCat ? (
-                // UI: Input Kategori Baru
                 <div className="flex gap-2">
                   <input
                     autoFocus
                     type="text"
                     placeholder="Nama Kategori Baru..."
-                    className="flex-1 px-4 py-3 bg-blue-50 border-2 border-blue-200 focus:border-[#197fe6] rounded-xl text-sm font-bold outline-none transition-all text-[#197fe6]"
+                    className="flex-1 px-4 py-4 bg-[#C5A059]/10 border border-[#C5A059]/40 focus:border-[#C5A059] rounded-xl text-sm font-bold text-[#C5A059] outline-none transition-all placeholder:text-[#C5A059]/40 shadow-inner"
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                   />
@@ -204,22 +242,23 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
                     type="button"
                     onClick={handleQuickAddCategory}
                     disabled={creatingCat || !newCategoryName}
-                    className="px-4 bg-[#197fe6] text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center"
+                    onMouseDown={(e) => handleSpringBtn(e as any, 'down')}
+                    onMouseUp={(e) => handleSpringBtn(e as any, 'up')}
+                    className="px-5 bg-[#C5A059] text-[#051122] rounded-xl hover:bg-[#d4b46a] transition-colors flex items-center justify-center disabled:opacity-50 shadow-lg shadow-[#C5A059]/20"
                   >
-                    {creatingCat ? <Loader2 className="animate-spin" size={16}/> : <Check size={18} />}
+                    {creatingCat ? <Loader2 className="animate-spin" size={18}/> : <Check size={20} />}
                   </button>
                 </div>
               ) : (
-                // UI: Select Biasa
                 <select
                   required
-                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-[#197fe6] focus:bg-white rounded-xl text-sm font-bold outline-none transition-all appearance-none"
+                  className="w-full px-4 py-4 bg-[#051122]/50 border border-[#C5A059]/20 focus:border-[#C5A059] rounded-xl text-sm font-bold text-white outline-none transition-all appearance-none shadow-inner"
                   value={formData.id_kategori_kegiatan}
                   onChange={(e) => setFormData({...formData, id_kategori_kegiatan: e.target.value})}
                 >
-                  <option value="">Pilih Kategori</option>
+                  <option value="" disabled hidden className="bg-[#051122] text-white/50">-- Pilih Kategori --</option>
                   {categories.map((cat) => (
-                    <option key={cat.id_kategori_kegiatan} value={cat.id_kategori_kegiatan}>
+                    <option key={cat.id_kategori_kegiatan} value={cat.id_kategori_kegiatan} className="bg-[#051122]">
                       {cat.nama_kategori}
                     </option>
                   ))}
@@ -229,13 +268,13 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
 
             {/* Input Tanggal & Waktu */}
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-[#4e7397] uppercase tracking-widest flex items-center gap-2">
-                <Calendar size={12} /> Waktu Mulai
+              <label className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest flex items-center gap-2">
+                <Calendar size={14} className="text-white/30" /> Waktu Mulai
               </label>
               <input
                 required
                 type="datetime-local"
-                className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-[#197fe6] focus:bg-white rounded-xl text-sm font-bold outline-none transition-all"
+                className="w-full px-4 py-4 bg-[#051122]/50 border border-[#C5A059]/20 focus:border-[#C5A059] rounded-xl text-sm font-bold text-white outline-none transition-all [color-scheme:dark] shadow-inner"
                 value={formData.tanggal_mulai}
                 onChange={(e) => setFormData({...formData, tanggal_mulai: e.target.value})}
               />
@@ -244,10 +283,12 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
 
           <button
             type="submit"
-            disabled={loading || isAddingNewCat} // Disable kalau lagi mode nambah kategori biar gak salah pencet
-            className="w-full bg-[#197fe6] hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || isAddingNewCat}
+            onMouseDown={(e) => handleSpringBtn(e as any, 'down')}
+            onMouseUp={(e) => handleSpringBtn(e as any, 'up')}
+            className="w-full bg-[#C5A059] text-[#051122] py-4 mt-6 rounded-xl font-black text-[10px] uppercase tracking-[0.3em] shadow-lg shadow-[#C5A059]/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#d4b46a]"
           >
-            {loading ? <Loader2 className="animate-spin" size={16} /> : 'Simpan Kegiatan'}
+            {loading ? <Loader2 className="animate-spin" size={16} /> : 'Simpan ke SSOT'}
           </button>
         </form>
       </div>

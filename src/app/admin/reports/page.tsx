@@ -1,33 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-import {
-  Users,
-  MapPin,
-  CheckCircle2,
-  Trophy,
-  ChevronRight,
-  Activity,
-  ShieldAlert,
-  Loader2,
-} from "lucide-react";
-import Link from "next/link";
+// Import Controller dan Komponen yang sudah dipisah
+import { fetchAggregatedReportStats } from "@/actions/reportController";
+import { StatCard } from "@/components/ui/StatCard";
 
-// ── Anime.js V4 Imports ──
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+} from "recharts";
+import { Users, MapPin, CheckCircle2, Trophy, ChevronRight, Activity, ShieldAlert, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { animate, createTimeline, spring, waapi, splitText, stagger } from 'animejs';
 
 export default function ReportsPage() {
@@ -46,44 +28,12 @@ export default function ReportsPage() {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    async function getReportData() {
+    async function loadData() {
       setLoading(true);
       try {
-        const { count: uniqueCount } = await supabase
-          .from("anggota")
-          .select("*", { count: "exact", head: true })
-          .eq("is_verified", true);
-
-        const { count: quarantineCount } = await supabase
-          .from("quarantine_anggota")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "pending");
-
-        const totalAttempts = (uniqueCount || 0) + (quarantineCount || 0);
-        const accuracyRate = totalAttempts > 0
-            ? (((uniqueCount || 0) / totalAttempts) * 100).toFixed(1)
-            : "100";
-
-        const { data: wijkData } = await supabase.from("wijk").select(`
-            nama_wijk,
-            anggota:anggota(count)
-          `);
-
-        const formattedWijk = wijkData?.map((w) => ({
-            name: w.nama_wijk,
-            total: w.anggota[0]?.count || 0,
-          })) || [];
-
-        setStats({
-          totalUnique: uniqueCount || 0,
-          totalPendingVetting: quarantineCount || 0,
-          dynamicAccuracy: accuracyRate,
-          wijkDistribution: formattedWijk,
-          matchQuality: [
-            { name: "Verified (Clean)", value: uniqueCount || 0 },
-            { name: "Pending Review", value: quarantineCount || 0 },
-          ],
-        });
+        // Memanggil Controller (Logic Layer), View tidak perlu tahu cara query database
+        const aggregatedData = await fetchAggregatedReportStats();
+        setStats(aggregatedData);
       } catch (err) {
         console.error("Gagal memuat analitik:", err);
       } finally {
@@ -91,7 +41,7 @@ export default function ReportsPage() {
       }
     }
 
-    getReportData();
+    loadData();
   }, []);
 
   // ── FITUR 1: WAAPI Ambient Background (Opera Gold) ──
@@ -121,12 +71,10 @@ export default function ReportsPage() {
 
       if (!headerNode || !titleNode) return;
 
-      // Persiapan (Sembunyikan sebelum animasi)
       headerNode.style.opacity = '0';
       statNodes.forEach(el => ((el as HTMLElement).style.opacity = '0'));
       chartNodes.forEach(el => ((el as HTMLElement).style.opacity = '0'));
 
-      // Anti-Crash SplitText
       let splitChars: any[] = [];
       if (!titleNode.dataset.split) {
         titleNode.innerText = "Analytics & Integrity"; 
@@ -158,15 +106,14 @@ export default function ReportsPage() {
         }, '<-=500');
       }
 
-      // FITUR: Cinematic Scale & Fade pada Chart
       if (chartNodes.length > 0) {
         tl.add(chartNodes, {
           opacity: [0, 1],
           scale: [0.85, 1],
           translateY: [20, 0],
-          ease: 'outElastic(1, 0.6)', // Pantulan skala yang premium
+          ease: 'outElastic(1, 0.6)',
           duration: 1200,
-          delay: stagger(200) // Chart muncul berurutan (Kiri lalu Kanan)
+          delay: stagger(200)
         }, '<-=400');
       }
 
@@ -366,32 +313,6 @@ export default function ReportsPage() {
           </div>
 
         </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, sub, icon, className = '' }: any) {
-  return (
-    <div
-      className={`${className} bg-[#0a192f]/40 backdrop-blur-xl p-10 rounded-[3rem] border border-[#C5A059]/20 shadow-2xl flex items-start justify-between group hover:border-[#C5A059]/50 transition-all duration-300`}
-      style={{ opacity: 0 }}
-    >
-      <div className="text-left space-y-1">
-        <p className="text-[9px] font-black text-[#C5A059]/60 uppercase tracking-[0.2em] mb-3">
-          {title}
-        </p>
-        <h3 className="text-5xl font-black text-white tracking-tighter italic">
-          {value}
-        </h3>
-        <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest pt-3 flex items-center gap-1">
-          <ChevronRight size={12} className="text-[#C5A059]" /> {sub}
-        </p>
-      </div>
-      <div
-        className={`p-5 bg-[#C5A059]/10 rounded-[2rem] transition-transform group-hover:rotate-12 group-hover:scale-110 duration-300`}
-      >
-        {icon}
       </div>
     </div>
   );

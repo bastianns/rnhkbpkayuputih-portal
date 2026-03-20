@@ -1,0 +1,30 @@
+import { supabase } from '@/lib/supabase';
+
+// --- ENGINE PARAMETERS ---
+export async function fetchParameters() {
+  const { data, error } = await supabase.from('dedup_parameter').select('*').order('field_name', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function updateParameter(fieldName: string, m: number, u: number) {
+  const { error } = await supabase.from('dedup_parameter').update({ match_probability_m: m, unmatch_probability_u: u }).eq('field_name', fieldName);
+  if (error) throw error;
+}
+
+// --- MASTER DICTIONARY ---
+export async function fetchMasterTable(table: string, orderCol: string) {
+  const { data, error } = await supabase.from(table).select('*').order(orderCol, { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function insertMasterRow(table: string, payload: any) {
+  const { error } = await supabase.from(table).insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteMasterRow(table: string, idCol: string, id: string) {
+  const { error } = await supabase.from(table).delete().eq(idCol, id);
+  if (error) throw error;
+}

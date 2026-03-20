@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+
+// MVC Imports
+import { initializeDashboard, submitDashboardCheckin, processLogout } from '@/actions/dashboardController';
+
 // Import Anime.js V4 Utilities
 import { createTimeline, stagger, splitText, animate, spring, waapi, svg } from 'animejs'; 
 import { 
-  User, Calendar, Star, Trophy, Crown, Loader2, LogOut, 
+  User, Calendar, Star, Trophy, Loader2, LogOut, 
   ShieldCheck, MapPin, AlertCircle
 } from 'lucide-react';
 
@@ -17,7 +20,6 @@ export default function MemberMobileDashboard() {
   const { id } = useParams();
   const router = useRouter();
   
-  // Refs untuk target animasi spesifik
   const nameRef = useRef<HTMLSpanElement>(null);
   const pulseRef = useRef<HTMLSpanElement>(null);
   
@@ -31,62 +33,37 @@ export default function MemberMobileDashboard() {
   const [perans, setPerans] = useState<any[]>([]);
   const [selectedPeran, setSelectedPeran] = useState('');
   const [checkInMessage, setCheckInMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [authId, setAuthId] = useState<string>('');
+
+  const fetchDashboardData = async () => {
+      setLoading(true);
+      const result = await initializeDashboard();
+      
+      if (result.success) {
+        const data = result as any; 
+        
+        setMember(data.member);
+        setActivities(data.activities || []);
+        setActiveEvent(data.liveEvent);
+        setPerans(data.perans || []);
+        if(data.authId) setAuthId(data.authId);
+      } else {
+        console.error(result.error);
+        router.push('/login');
+      }
+      setLoading(false);
+    };
 
   useEffect(() => {
     fetchDashboardData();
   }, [id]);
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !user.email) throw new Error("Sesi tidak valid");
-
-      const { data: memberData } = await supabase
-        .from('anggota')
-        .select('*, wijk(nama_wijk)')
-        .eq('email', user.email)
-        .single();
-      
-      if (memberData) setMember(memberData);
-
-      if (memberData) {
-        const { data: historyData } = await supabase
-          .from('riwayat_partisipasi')
-          .select(`*, katalog_peran (bobot_kontribusi)`)
-          .eq('id_anggota', memberData.id_anggota);
-        if (historyData) setActivities(historyData);
-      }
-
-      const { data: liveEvent } = await supabase
-        .from('kegiatan')
-        .select('*, kategori_kegiatan(nama_kategori)')
-        .eq('is_open', true)
-        .order('tanggal_mulai', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (liveEvent) setActiveEvent(liveEvent);
-
-      const { data: peranData } = await supabase.from('katalog_peran').select('*');
-      if (peranData) setPerans(peranData);
-    } catch (error) {
-      console.error("Gagal memuat dashboard:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // --- KOREOGRAFI UTAMA (Timeline, SplitText, WAAPI, & Drawable SVG) ---
   useEffect(() => {
     if (!loading && member) {
       const timer = setTimeout(() => {
         const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 1000 } });
-
-        // 1. Drawable SVG: Menggambar garis lingkaran foto profil
         const profileDrawable = svg.createDrawable('.profile-ring-path');
 
-        // 2. SplitText: Pecah nama menjadi karakter
         if (nameRef.current) {
           nameRef.current.innerText = member?.nama_lengkap?.split(' ')[0] || 'Member';
           const { chars } = splitText(nameRef.current, { chars: true });
@@ -100,14 +77,9 @@ export default function MemberMobileDashboard() {
             .add(profileDrawable, { pathLength: [0, 1], duration: 1500 }, '<-=1000');
         }
 
-        // 3. WAAPI Pulse: Denyut Live Event (Hemat Baterai)
         if (pulseRef.current) {
           waapi.animate(pulseRef.current, {
-            scale: [1, 1.5],
-            opacity: [0.6, 0],
-            duration: 1500,
-            loop: true,
-            ease: 'out(2)'
+            scale: [1, 1.5], opacity: [0.6, 0], duration: 1500, loop: true, ease: 'out(2)'
           });
         }
       }, 200);
@@ -115,37 +87,30 @@ export default function MemberMobileDashboard() {
     }
   }, [loading, member]);
 
-  // --- INTERAKSI EVENT HANDLERS ---
-
-  // Tactile Feedback untuk Tombol
   const handleBtnFeedback = (e: React.MouseEvent<HTMLButtonElement>, state: 'down' | 'up') => {
-    animate(e.currentTarget, {
-      scale: state === 'down' ? 0.95 : 1,
-      duration: 400,
-      ease: spring({ bounce: 0.45 })
-    });
+    animate(e.currentTarget, { scale: state === 'down' ? 0.95 : 1, duration: 400, ease: spring({ bounce: 0.45 }) });
   };
 
-  // Konfirmasi Kehadiran
   const handleConfirmAttendance = async () => {
     if (!selectedPeran || !activeEvent || !member) return;
     setIsCheckingIn(true);
     setCheckInMessage(null);
-    try {
-      const { data: existing } = await supabase.from('riwayat_partisipasi').select('id_partisipasi').eq('id_anggota', member.id_anggota).eq('id_kegiatan', activeEvent.id_kegiatan).single();
-      if (existing) { setCheckInMessage({ type: 'error', text: 'Sudah absen di kegiatan ini.'}); setIsCheckingIn(false); return; }
-      const { error } = await supabase.from('riwayat_partisipasi').insert({ id_anggota: member.id_anggota, id_kegiatan: activeEvent.id_kegiatan, id_peran: selectedPeran, status_kehadiran: 'Hadir', waktu_check_in: new Date().toISOString() });
-      if (error) throw error;
-      setCheckInMessage({ type: 'success', text: 'Kehadiran berhasil dicatat!'});
+    
+    // Panggil Controller, bukan Supabase DB
+    const result = await submitDashboardCheckin(member.id_anggota, activeEvent.id_kegiatan, selectedPeran, authId);
+    
+    if (result.success) {
+      setCheckInMessage({ type: 'success', text: result.message as string });
       fetchDashboardData(); 
-    } catch (error: any) { setCheckInMessage({ type: 'error', text: error.message }); } 
-    finally { setIsCheckingIn(false); }
+    } else {
+      setCheckInMessage({ type: 'error', text: result.error as string });
+    }
+    setIsCheckingIn(false);
   };
 
-  // Logout Handler (Solusi Error handleLogout is not defined)
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    await supabase.auth.signOut();
+    await processLogout();
     router.push('/login');
   };
 
@@ -239,7 +204,6 @@ export default function MemberMobileDashboard() {
               <div className="flex justify-between border-b border-[#d4af37]/10 pb-2"><span>Rank</span><span className="text-[#f1e5ac] italic serif tracking-normal text-xs">{levelName}</span></div>
               <div className="flex justify-between border-b border-[#d4af37]/10 pb-2"><span>Sejak</span><span className="text-white/80">{member?.created_at ? new Date(member.created_at).getFullYear() : '2026'}</span></div>
             </div>
-            {/* Tombol Logout Sekarang Terhubung dengan handleLogout di baris 150 */}
             <button onClick={handleLogout} disabled={isLoggingOut} className="mt-12 flex items-center justify-center gap-3 w-full py-4 border border-[#d4af37]/20 rounded-lg text-[#d4af37]/60 hover:text-red-400 hover:border-red-900/50 transition-all uppercase tracking-widest text-[10px] font-bold group disabled:opacity-50">
               {isLoggingOut ? <Loader2 className="animate-spin w-4 h-4" /> : <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />}<span>Portal Sign Out</span>
             </button>

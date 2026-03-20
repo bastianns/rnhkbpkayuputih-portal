@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+
+// ── MVC Imports ──
+import { fetchMemberHistory } from '@/actions/dashboardController';
+
 import { animate, createTimeline, createDrawable, waapi, stagger, splitText } from 'animejs';
 import { Clock, Search, ArrowLeft, Star, Calendar, ShieldCheck, Award, Loader2 } from 'lucide-react';
 import AnimatedCounter from '@/components/AnimatedCounter';
@@ -92,33 +95,21 @@ export default function MemberHistoryPage() {
     (sum, item) => sum + (item.katalog_peran?.bobot_kontribusi || 0), 0
   );
 
-  useEffect(() => { fetchHistoryData(); }, [id]);
+  useEffect(() => { loadHistoryData(); }, [id]);
 
-  const fetchHistoryData = async () => {
+  // ── Pemanggilan MVC Controller ──
+  const loadHistoryData = async () => {
     setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Sesi tidak valid');
-
-      const { data: memberData } = await supabase
-        .from('anggota').select('*').eq('email', user.email).single();
-      if (memberData) setMember(memberData);
-
-      if (memberData) {
-        const { data: historyData, error } = await supabase
-          .from('riwayat_partisipasi')
-          .select('*, kegiatan (nama_kegiatan, tanggal_mulai), katalog_peran (nama_peran, bobot_kontribusi)')
-          .eq('id_anggota', memberData.id_anggota)
-          .order('waktu_check_in', { ascending: false });
-
-        if (error) throw error;
-        if (historyData) setHistory(historyData);
-      }
-    } catch (err) {
-      console.error('Gagal menarik data riwayat:', err);
-    } finally {
-      setLoading(false);
+    const result = await fetchMemberHistory();
+    
+    if (result.success) {
+      setMember(result.member);
+      setHistory(result.history || []);
+    } else {
+      console.error('Gagal menarik data riwayat:', result.error);
     }
+    
+    setLoading(false);
   };
 
   const filteredHistory = history.filter((item) =>
@@ -126,7 +117,6 @@ export default function MemberHistoryPage() {
   );
 
   // ── FITUR 1: waapi.animate() — Light Rays ────────────────────────────
-  // Menggunakan afterPaint agar ref sudah terhubung ke DOM yang ter-paint
   useEffect(() => {
     if (loading) return;
 
@@ -156,7 +146,6 @@ export default function MemberHistoryPage() {
   }, [loading]);
 
   // ── FITUR 2: splitText() — Title Animation ───────────────────────────
-  // Double rAF memastikan titleRef.current sudah di-paint sebelum splitText dipanggil
   useEffect(() => {
     if (loading) return;
 
@@ -164,7 +153,6 @@ export default function MemberHistoryPage() {
       if (!titleRef.current) return;
 
       const split = splitText(titleRef.current);
-      // Guard: pastikan splitText berhasil menghasilkan chars
       if (!split?.chars?.length) return;
 
       animate(split.chars, {
@@ -181,14 +169,11 @@ export default function MemberHistoryPage() {
   }, [loading]);
 
   // ── FITUR 3: createTimeline — Entry Animations ───────────────────────
-  // Guard ketat: cek semua selector ada di DOM sebelum timeline dibuat
   useEffect(() => {
     if (loading) return;
 
     const cancel = afterPaint(() => {
       const selectors = ['.anim-back', '.anim-subtitle', '.anim-summary', '.anim-search'];
-
-      // Batalkan jika ada satu saja elemen yang belum ada
       const allExist = selectors.every((sel) => document.querySelector(sel));
       if (!allExist) return;
 
@@ -204,7 +189,6 @@ export default function MemberHistoryPage() {
 
   // ── Intersection Observer — History Cards ────────────────────────────
   useEffect(() => {
-    // Jalankan setelah paint agar kartu sudah ada di DOM
     const cancel = afterPaint(() => {
       const observer = new IntersectionObserver(
         (entries) => {
@@ -229,18 +213,12 @@ export default function MemberHistoryPage() {
         observer.observe(card);
       });
 
-      // Simpan referensi observer agar bisa di-disconnect saat cleanup
       return () => observer.disconnect();
     });
 
-    // cancel() di sini hanya membatalkan rAF jika komponen unmount
-    // sebelum callback sempat berjalan
     return cancel;
   }, [filteredHistory]);
 
-  // ─────────────────────────────────────────────────────────
-  // Loading State
-  // ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[#050b18] flex items-center justify-center">
@@ -249,9 +227,6 @@ export default function MemberHistoryPage() {
     );
   }
 
-  // ─────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────
   return (
     <main className="min-h-screen flex flex-col items-center p-6 md:p-12 relative overflow-hidden bg-[#050b18] font-sans selection:bg-[#d4af37]/30">
 

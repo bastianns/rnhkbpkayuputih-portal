@@ -1,6 +1,7 @@
 "use server";
 
 import { getVerifiedMembers, logExportAction } from '@/lib/models/recordsModel';
+import { getMemberById, getMemberJourney } from '@/lib/models/recordsModel';
 
 // Fungsi 1: Mengambil data untuk tabel UI
 export async function fetchMasterRecords() {
@@ -53,5 +54,18 @@ export async function generateExportPackage(filteredData: any[]) {
   } catch (error) {
     console.error("Gagal menghasilkan paket ekspor:", error);
     return { success: false, error: "Terjadi kesalahan saat membuat dokumen ekspor." };
+  }
+}
+
+export async function fetchMemberDetailData(id: string) {
+  try {
+    const [member, journey] = await Promise.all([
+      getMemberById(id),
+      getMemberJourney(id)
+    ]);
+    return { success: true, member, journey };
+  } catch (error: any) {
+    console.error("Gagal memuat detail profil:", error);
+    return { success: false, error: error.message || "Gagal memuat data anggota." };
   }
 }

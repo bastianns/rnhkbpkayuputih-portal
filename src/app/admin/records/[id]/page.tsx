@@ -3,7 +3,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+
+// ── MVC Imports ──
+import { fetchMemberDetailData } from '@/actions/recordsController';
+
 // ── Anime.js V4 Imports ──
 import { animate, createTimeline, spring, splitText, stagger, waapi } from 'animejs';
 import { 
@@ -28,39 +31,20 @@ export default function MemberDetailPage() {
   const bgAmbientRef = useRef<HTMLDivElement>(null);
 
   const fetchMemberFullData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const { data: memberData, error: mError } = await supabase
-        .from('anggota')
-        .select('*, wijk:id_wijk (nama_wijk, kode_wijk)')
-        .eq('id_anggota', id)
-        .single();
-
-      if (mError) throw mError;
-
-      const { data: participationData, error: pError } = await supabase
-        .from('riwayat_partisipasi')
-        .select(`
-          id_partisipasi,
-          waktu_check_in,
-          status_kehadiran,
-          kegiatan:id_kegiatan (nama_kegiatan, tanggal_mulai),
-          peran:id_peran (nama_peran)
-        `)
-        .eq('id_anggota', id)
-        .order('waktu_check_in', { ascending: false });
-
-      if (pError) throw pError;
-
-      setMember(memberData);
-      setJourney(participationData || []);
-    } catch (err: any) {
-      setError(err.message || "Gagal memuat data anggota.");
-    } finally {
-      setLoading(false);
+    // Menggunakan Controller, bukan direct DB call
+    const result = await fetchMemberDetailData(id as string);
+    
+    if (result.success) {
+      setMember(result.member);
+      setJourney(result.journey || []);
+    } else {
+      setError(result.error);
     }
+    
+    setLoading(false);
   }, [id]);
 
   useEffect(() => {
@@ -85,7 +69,6 @@ export default function MemberDetailPage() {
   useEffect(() => {
     if (loading || !member) return;
 
-    // Persiapan sebelum animasi (Hidden State)
     if (headerCardRef.current) headerCardRef.current.style.opacity = '0';
     const detailCards = Array.from(document.querySelectorAll('.anim-detail-card'));
     detailCards.forEach(el => ((el as HTMLElement).style.opacity = '0'));
@@ -97,7 +80,6 @@ export default function MemberDetailPage() {
       const headerNode = headerCardRef.current;
       if (!nameNode || !headerNode) return;
 
-      // Anti-Crash 3D SplitText Initialization
       let splitChars: any[] = [];
       if (!nameNode.dataset.split) {
         const split = splitText(nameNode, { chars: true });
@@ -109,10 +91,8 @@ export default function MemberDetailPage() {
 
       const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 1000 } });
       
-      // Card Induk Masuk
       tl.add(headerNode, { opacity: [0, 1], y: [-30, 0] });
 
-      // TRUE 3D SplitText Effect (Seperti mekanik jam / koin)
       if (splitChars.length > 0) {
         tl.add(splitChars, {
           opacity: [0, 1], 
@@ -123,30 +103,18 @@ export default function MemberDetailPage() {
         }, '<-=700');
       }
 
-      // Detail Profile Masuk
       if (detailCards.length > 0) {
-        tl.add(detailCards, { 
-          opacity: [0, 1], 
-          x: [-30, 0], 
-          delay: stagger(100) 
-        }, '<-=600');
+        tl.add(detailCards, { opacity: [0, 1], x: [-30, 0], delay: stagger(100) }, '<-=600');
       }
 
-      // Elastic Timeline Journey Masuk
       if (journeyItems.length > 0) {
-        tl.add(journeyItems, { 
-          opacity: [0, 1], 
-          x: [50, 0], 
-          ease: 'outElastic(1, 0.6)', 
-          delay: stagger(80) 
-        }, '<-=500');
+        tl.add(journeyItems, { opacity: [0, 1], x: [50, 0], ease: 'outElastic(1, 0.6)', delay: stagger(80) }, '<-=500');
       }
     }, 150);
 
     return () => clearTimeout(timer);
   }, [loading, member]);
 
-  // ── FITUR 3: Tactile Spring Feedback ──
   const handleSpringBtn = (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => {
     animate(e.currentTarget, { scale: state === 'down' ? 0.95 : 1, duration: 400, ease: spring({ bounce: 0.45 }) });
   };
@@ -158,26 +126,25 @@ export default function MemberDetailPage() {
     </div>
   );
 
+  if (error) return (
+    <div className="flex h-screen flex-col items-center justify-center bg-[#051122] text-white">
+      <p className="text-red-500 mb-4">{error}</p>
+      <button onClick={() => router.back()} className="px-4 py-2 bg-white/10 rounded">Kembali</button>
+    </div>
+  );
+
   return (
     <div className="p-8 space-y-8 bg-[#051122] min-h-screen text-left relative overflow-hidden font-sans">
       
-      {/* WAAPI Background Effect */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden flex justify-center items-start">
-        <div 
-          ref={bgAmbientRef} 
-          className="w-[150vmax] h-[150vmax] -translate-y-1/2 rounded-full" 
-          style={{ background: 'conic-gradient(from 0deg, transparent, rgba(197, 160, 89, 0.05), transparent)' }} 
-        />
+        <div ref={bgAmbientRef} className="w-[150vmax] h-[150vmax] -translate-y-1/2 rounded-full" style={{ background: 'conic-gradient(from 0deg, transparent, rgba(197, 160, 89, 0.05), transparent)' }} />
       </div>
 
       <div className="relative z-10 space-y-8 max-w-7xl mx-auto">
-        
-        {/* Navigation Bar */}
         <div className="flex justify-between items-center">
           <button 
             onClick={() => router.back()} 
-            onMouseDown={(e) => handleSpringBtn(e, 'down')}
-            onMouseUp={(e) => handleSpringBtn(e, 'up')}
+            onMouseDown={(e) => handleSpringBtn(e, 'down')} onMouseUp={(e) => handleSpringBtn(e, 'up')}
             className="flex items-center gap-2 text-[#C5A059]/60 hover:text-[#C5A059] transition-colors font-black text-[10px] uppercase tracking-widest group"
           >
             <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Kembali ke Master Records
@@ -185,22 +152,19 @@ export default function MemberDetailPage() {
           
           <Link 
             href={`/admin/logs?search=${member.nama_lengkap}`}
-            onMouseDown={(e) => handleSpringBtn(e, 'down')}
-            onMouseUp={(e) => handleSpringBtn(e, 'up')}
+            onMouseDown={(e) => handleSpringBtn(e, 'down')} onMouseUp={(e) => handleSpringBtn(e, 'up')}
             className="flex items-center gap-2 px-6 py-3.5 bg-[#0a192f]/80 backdrop-blur-xl border border-[#C5A059]/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#C5A059] hover:bg-[#C5A059] hover:text-[#051122] transition-all shadow-[0_0_15px_rgba(197,160,89,0.15)] hover:shadow-[0_0_25px_rgba(197,160,89,0.4)]"
           >
             <History size={14} /> Audit Trail
           </Link>
         </div>
 
-        {/* Profile Header Card */}
         <div ref={headerCardRef} className="bg-[#0a192f]/60 backdrop-blur-xl rounded-[3rem] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-[#C5A059]/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
           <div className="flex items-center gap-8">
             <div className="size-24 shrink-0 bg-[#C5A059] rounded-[2.5rem] flex items-center justify-center text-[#051122] shadow-[0_0_30px_rgba(197,160,89,0.3)]">
               <User size={48} />
             </div>
             <div className="text-left">
-              {/* Prespektif 3D yang sangat kuat */}
               <div style={{ perspective: '1200px' }} className="overflow-hidden pb-1">
                 <h1 ref={nameRef} className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase italic leading-none">
                   {member.nama_lengkap}
@@ -226,8 +190,6 @@ export default function MemberDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Kolom Kiri: Detail Profil */}
           <div className="lg:col-span-1 space-y-8">
             <div className="anim-detail-card bg-[#0a192f]/60 backdrop-blur-xl rounded-[2.5rem] border border-[#C5A059]/20 shadow-2xl p-8">
               <h3 className="font-black text-[#C5A059] text-[10px] uppercase tracking-[0.3em] mb-8 flex items-center gap-2">
@@ -268,7 +230,6 @@ export default function MemberDetailPage() {
             </div>
           </div>
 
-          {/* Kolom Kanan: Member Journey */}
           <div className="lg:col-span-2">
             <div className="anim-detail-card bg-[#0a192f]/60 backdrop-blur-xl rounded-[2.5rem] border border-[#C5A059]/20 shadow-2xl p-10 min-h-full">
               <div className="flex justify-between items-center mb-12 border-b border-white/5 pb-8">
@@ -320,7 +281,6 @@ export default function MemberDetailPage() {
                   ))
                 )}
                 
-                {/* Seed Data Point */}
                 <div className="anim-journey-item relative flex items-start gap-8 opacity-40">
                   <div className="absolute left-0 size-10 bg-[#051122] border-[3px] border-white/20 rounded-full flex items-center justify-center z-10">
                     <Activity size={16} className="text-white/40" />

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+// Import Server Actions dari Controller (Supabase dihapus)
+import { fetchAllCategories, createQuickCategory, createNewEvent } from '@/actions/eventController';
 import { X, Calendar, Tag, FileText, Loader2, Plus, Check, Undo2 } from 'lucide-react';
 
 // ── Anime.js V4 Imports ──
@@ -30,13 +31,10 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
     tanggal_mulai: ''
   });
 
-  // Fetch Kategori dari Supabase
+  // Fetch Kategori memanggil Controller
   async function fetchCategories() {
-    const { data } = await supabase
-      .from('kategori_kegiatan')
-      .select('*')
-      .order('nama_kategori');
-    if (data) setCategories(data);
+    const data = await fetchAllCategories();
+    setCategories(data || []);
   }
 
   // ── FITUR: Entry Animasi Pegas (Spring) pada Modal ──
@@ -79,70 +77,39 @@ export default function AddEventModal({ isOpen, onClose, onSuccess }: AddEventMo
   const handleQuickAddCategory = async () => {
     if (!newCategoryName.trim()) return;
     setCreatingCat(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: newCat, error } = await supabase
-        .from('kategori_kegiatan')
-        .insert([{ nama_kategori: newCategoryName, bobot_dasar: 10 }])
-        .select().single();
-
-      if (error) throw error;
-
-      // Log Audit
-      await supabase.from('audit_log').insert({
-        actor_id: user?.id || null,
-        action: 'INSERT_MASTER_DATA',
-        entity: 'kategori_kegiatan',
-        entity_id: newCat.id_kategori_kegiatan,
-        new_data: { nama_kategori: newCat.nama_kategori, source: 'Quick Add from Modal' }
-      });
-
+    
+    // Panggil Controller untuk insert kategori dan catat ke Audit Log
+    const result = await createQuickCategory(newCategoryName);
+    
+    if (result.success && result.category) {
       await fetchCategories();
-      setFormData({ ...formData, id_kategori_kegiatan: newCat.id_kategori_kegiatan });
+      setFormData({ ...formData, id_kategori_kegiatan: result.category.id_kategori_kegiatan });
       setIsAddingNewCat(false);
       setNewCategoryName('');
-    } catch (err: any) {
-      alert("Gagal tambah kategori: " + err.message);
-    } finally {
-      setCreatingCat(false);
+    } else {
+      alert("Gagal tambah kategori: " + result.error);
     }
+    
+    setCreatingCat(false);
   };
 
   // --- LOGIKA: SUBMIT EVENT ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: newEvent, error } = await supabase
-        .from('kegiatan')
-        .insert([{
-          nama_kegiatan: formData.nama_kegiatan,
-          id_kategori_kegiatan: formData.id_kategori_kegiatan,
-          tanggal_mulai: new Date(formData.tanggal_mulai).toISOString()
-        }])
-        .select().single();
-
-      if (error) throw error;
-
-      if (newEvent) {
-        await supabase.from('audit_log').insert({
-          actor_id: user?.id || null,
-          action: 'INSERT_EVENT',
-          entity: 'kegiatan',
-          entity_id: newEvent.id_kegiatan,
-          new_data: { nama_kegiatan: newEvent.nama_kegiatan, waktu: newEvent.tanggal_mulai }
-        });
-      }
-
+    
+    // Panggil Controller untuk insert kegiatan dan catat ke Audit Log
+    const result = await createNewEvent(formData);
+    
+    if (result.success) {
       setFormData({ nama_kegiatan: '', id_kategori_kegiatan: '', tanggal_mulai: '' });
       onSuccess();
       handleClose();
-    } catch (error: any) {
-      alert("Gagal menambah kegiatan: " + error.message);
-    } finally {
-      setLoading(false);
+    } else {
+      alert("Gagal menambah kegiatan: " + result.error);
     }
+    
+    setLoading(false);
   };
 
   // Animasi keluar (Exit)

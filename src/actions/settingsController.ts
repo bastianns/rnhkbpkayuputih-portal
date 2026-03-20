@@ -10,11 +10,25 @@ export async function getEngineSettings() {
 export async function saveEngineSettings(parameters: any[]) {
   try {
     for (const param of parameters) {
-      // Logika Inti Fellegi-Sunter: m harus lebih besar dari u
+      // 1. Logika Inti Fellegi-Sunter [cite: 58]
       if (param.match_probability_m <= param.unmatch_probability_u) {
-        return { success: false, error: `Logika Ditolak pada ${param.field_name}: Nilai (m) harus lebih besar dari (u).` };
+        return { 
+          success: false, 
+          error: `Logika Ditolak pada ${param.field_name}: Nilai (m) harus lebih besar dari (u).` 
+        };
       }
-      await updateParameter(param.field_name, param.match_probability_m, param.unmatch_probability_u);
+
+      // 2. Kalkulasi Agreement Weight (wa) via Logaritma Natural 
+      // Rumus: wa = ln(m/u)
+      const wa = Math.log(param.match_probability_m / param.unmatch_probability_u);
+
+      // 3. Simpan ke Model
+      await updateParameter(
+        param.field_name, 
+        param.match_probability_m, 
+        param.unmatch_probability_u,
+        wa
+      );
     }
     return { success: true };
   } catch (error) {

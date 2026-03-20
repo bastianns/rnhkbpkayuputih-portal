@@ -2,7 +2,7 @@ import { Users, Clock, ChevronRight, Activity } from 'lucide-react';
 
 interface LiveFeedProps {
   attendees: any[];
-  feedContainerRef: React.RefObject<HTMLDivElement>;
+  feedContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function LiveFeed({ attendees, feedContainerRef }: LiveFeedProps) {

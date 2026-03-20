@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+// MVC Imports
+import { fetchRegistrationOptions, submitRegistrationForm } from '@/actions/registerController';
+
 // Anime.js V4 Imports
 import { animate, createTimeline, spring, waapi, splitText, stagger, createDrawable } from 'animejs';
 import { 
@@ -37,41 +39,33 @@ export default function RegistrationPage() {
   const bgRayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function fetchReferenceData() {
-      const { data: w } = await supabase.from('wijk').select('*').order('nama_wijk');
-      const { data: s } = await supabase.from('ref_keahlian').select('*').order('nama_keahlian');
-      const { data: o } = await supabase.from('ref_kategori_kesibukan').select('*').order('nama_kategori');
-      if (w) setWijks(w); if (s) setSkills(s); if (o) setOccupations(o);
+    async function loadReferenceData() {
+      const data = await fetchRegistrationOptions();
+      setWijks(data.wijks);
+      setSkills(data.skills);
+      setOccupations(data.occupations);
     }
-    fetchReferenceData();
+    loadReferenceData();
   }, []);
 
   // ── FITUR 1: WAAPI Background ──
-    useEffect(() => {
-      if (!bgRayRef.current) return;
-      const rayAnim = waapi.animate(bgRayRef.current, {
-        rotate: ['0deg', '360deg'],
-        opacity: [0.03, 0.08, 0.03],
-        duration: 25000,
-        iterations: Infinity,
-        easing: 'linear'
-      });
-      
-      // PERBAIKAN DI SINI: Gunakan kurung kurawal {} agar mengembalikan 'void'
-      return () => {
-        rayAnim?.cancel();
-      };
-    }, []);
+  useEffect(() => {
+    if (!bgRayRef.current) return;
+    const rayAnim = waapi.animate(bgRayRef.current, {
+      rotate: ['0deg', '360deg'],
+      opacity: [0.03, 0.08, 0.03],
+      duration: 25000,
+      iterations: Infinity,
+      easing: 'linear'
+    });
+    
+    return () => { rayAnim?.cancel(); };
+  }, []);
 
   // ── FITUR 2A: Initial Card Entry (Hanya Jalan Sekali) ──
   useEffect(() => {
     if (formCardRef.current) {
-      animate(formCardRef.current, {
-        opacity: [0, 1],
-        y: [30, 0],
-        duration: 1000,
-        ease: 'outExpo'
-      });
+      animate(formCardRef.current, { opacity: [0, 1], y: [30, 0], duration: 1000, ease: 'outExpo' });
     }
   }, []);
 
@@ -80,45 +74,32 @@ export default function RegistrationPage() {
     const cardNode = formCardRef.current;
     if (!cardNode) return;
 
-    // Sembunyikan input secara langsung sesaat sebelum animasi berjalan
     const inputNodes = Array.from(cardNode.querySelectorAll('.anim-input'));
     inputNodes.forEach(el => ((el as HTMLElement).style.opacity = '0'));
 
     const timer = setTimeout(() => {
       const titleNode = stepTitleRef.current;
       const currentInputs = Array.from(cardNode.querySelectorAll('.anim-input'));
-
       const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 1000 } });
 
-      // Animasikan Judul Per Karakter (Aman dari split ganda karena key={currentStep})
       if (titleNode) {
         const split = splitText(titleNode, { chars: true });
         if (split && split.chars && split.chars.length > 0) {
-          tl.add(split.chars, { 
-            opacity: [0, 1], y: [15, 0], rotateX: [90, 0], delay: stagger(30) 
-          });
+          tl.add(split.chars, { opacity: [0, 1], y: [15, 0], rotateX: [90, 0], delay: stagger(30) });
         }
       }
 
-      // Animasikan input WAJIB cek length > 0 agar tidak melempar "No target found"
       if (currentInputs.length > 0) {
-        tl.add(currentInputs, { 
-          opacity: [0, 1], x: [-15, 0], delay: stagger(60) 
-        }, titleNode ? '<-=600' : 0);
+        tl.add(currentInputs, { opacity: [0, 1], x: [-15, 0], delay: stagger(60) }, titleNode ? '<-=600' : 0);
       }
-
-    }, 150); // Jeda agar React selesai merender struktur DOM baru
+    }, 150);
 
     return () => clearTimeout(timer);
-  }, [currentStep]); // Berjalan setiap klik Next/Back
+  }, [currentStep]);
 
   // ── FITUR 3: Tactile Spring ──
   const handleSpringBtn = (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => {
-    animate(e.currentTarget, {
-      scale: state === 'down' ? 0.96 : 1,
-      duration: 400,
-      ease: spring({ bounce: 0.4 })
-    });
+    animate(e.currentTarget, { scale: state === 'down' ? 0.96 : 1, duration: 400, ease: spring({ bounce: 0.4 }) });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -142,20 +123,19 @@ export default function RegistrationPage() {
 
   const handleSubmit = async () => {
     if (!formData.consent_pdp) { setError("Mohon setujui kebijakan UU PDP."); return; }
-    setLoading(true); setError(null);
-    try {
-      const emailFormatted = formData.email.toLowerCase().trim();
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: emailFormatted, password: formData.password, options: { data: { full_name: formData.nama_lengkap } }
-      });
-      if (authError) throw authError;
-      const { password, consent_pdp, ...rawData } = formData;
-      const { error: submitError } = await supabase.from('quarantine_anggota').insert([{ 
-        raw_data: { ...rawData, email: emailFormatted, id_auth: authData.user?.id }, status: 'pending' 
-      }]);
-      if (submitError) throw submitError;
+    
+    setLoading(true); 
+    setError(null);
+    
+    const result = await submitRegistrationForm(formData);
+    
+    if (result.success) {
       setSubmitted(true);
-    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
+    } else {
+      setError(result.error || "Terjadi kesalahan saat pendaftaran.");
+    }
+    
+    setLoading(false); 
   };
 
   if (submitted) return <SuccessScreen />;
@@ -200,7 +180,6 @@ export default function RegistrationPage() {
           {/* Form Container dengan initial opacity 0 */}
           <div ref={formCardRef} className="flex-1" style={{ opacity: 0 }}>
             
-            {/* KUNCI: key={currentStep} memaksa React merender ulang elemen ini sebagai DOM baru bersih */}
             <div style={{ perspective: '800px' }} className="mb-8 overflow-hidden">
               <h3 key={`title-${currentStep}`} ref={stepTitleRef} className="font-serif text-3xl text-white italic">
                 {STEPS[currentStep - 1].title}
@@ -209,7 +188,6 @@ export default function RegistrationPage() {
 
             {error && <div className="p-4 bg-red-950/30 border border-red-900/40 rounded-lg flex gap-3 text-red-400 text-[10px] font-bold uppercase mb-6"><Info size={16}/>{error}</div>}
 
-            {/* KUNCI: Wrapper step juga diberi key agar element DOM di dalamnya diganti total saat next */}
             {currentStep === 1 && (
               <div key="step1-content" className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <InputBlock label="Nama (KTP)" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleInputChange} icon={<User size={14}/>} />

@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, Suspense, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { animate, createTimeline, spring, waapi, splitText, stagger } from 'animejs';
 import Link from 'next/link';
 import { Cross, Loader2, AlertCircle, CheckCircle2, Mail, Lock, ArrowRight } from 'lucide-react';
+
+// ── MVC Imports ──
+import { processLoginRequest } from '@/actions/authController';
 
 // ─────────────────────────────────────────────────────────
 // Ornate Corner Accent
@@ -109,25 +111,23 @@ function LoginContent() {
   const isSystemAdmin = email.toLowerCase().endsWith('@rnhkbp.com');
 
   // ── FITUR 1: WAAPI Background Pulse ──────────────────────────
-    useEffect(() => {
-      if (!bgRayRef.current) return;
-      const rayAnim = waapi.animate(bgRayRef.current, {
-        rotate    : ['0deg', '360deg'],
-        opacity   : [0.05, 0.1, 0.05],
-        duration  : 20000,
-        iterations: Infinity,
-        easing    : 'linear',
-      });
+  useEffect(() => {
+    if (!bgRayRef.current) return;
+    const rayAnim = waapi.animate(bgRayRef.current, {
+      rotate    : ['0deg', '360deg'],
+      opacity   : [0.05, 0.1, 0.05],
+      duration  : 20000,
+      iterations: Infinity,
+      easing    : 'linear',
+    });
 
-      // Tambahkan kurung kurawal di sini
-      return () => {
-        rayAnim?.cancel();
-      };
-    }, []);
+    return () => {
+      rayAnim?.cancel();
+    };
+  }, []);
 
   // ── FITUR 2: BULLETPROOF Entry Choreography ──────────────────
   useEffect(() => {
-    // 1. Sembunyikan elemen secara manual saat pertama kali mount
     if (logoRef.current) logoRef.current.style.opacity = '0';
     if (cardRef.current) cardRef.current.style.opacity = '0';
     if (btnRef.current) btnRef.current.style.opacity = '0';
@@ -135,33 +135,27 @@ function LoginContent() {
     initialInputs.forEach(el => ((el as HTMLElement).style.opacity = '0'));
 
     const timer = setTimeout(() => {
-      // 2. Ambil Node secara aman
       const logoNode  = logoRef.current;
       const cardNode  = cardRef.current;
       const titleNode = titleRef.current;
       const btnNode   = btnRef.current;
 
-      // Jika satu saja tidak ada, batalkan animasi (mencegah crash)
       if (!logoNode || !cardNode || !titleNode || !btnNode) return;
 
-      // 3. Pencegahan double-split saat Hot Reload (Tanpa menyentuh innerText React)
       let splitChars: any[] = [];
       if (!titleNode.dataset.split) {
         const split = splitText(titleNode, { chars: true });
         if (split && split.chars) splitChars = split.chars;
         titleNode.dataset.split = "true";
       } else {
-        // Jika sudah pernah di-split, tangkap kembali elemen spannya
         splitChars = Array.from(titleNode.querySelectorAll('span'));
       }
 
-      // 4. Bangun Timeline dengan validasi panjang target (length > 0)
       const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 1200 } });
       
       tl.add(logoNode, { opacity: [0, 1], y: [-30, 0], scale: [0.8, 1] })
         .add(cardNode, { opacity: [0, 1], y: [40, 0] }, '<-=800');
 
-      // Wajib cek panjang array sebelum add ke Anime.js!
       if (splitChars.length > 0) {
         tl.add(splitChars, {
           opacity : [0, 1],
@@ -182,7 +176,7 @@ function LoginContent() {
 
       tl.add(btnNode, { opacity: [0, 1], scale: [0.9, 1] }, '<-=900');
 
-    }, 200); // 200ms memberikan kepastian DOM sudah dicat penuh oleh browser
+    }, 200);
 
     return () => clearTimeout(timer);
   }, []);
@@ -196,38 +190,30 @@ function LoginContent() {
     });
   };
 
-  // ── Login Handler ─────────────────────────────────────────────
+  // ── Login Handler (Refaktor MVC) ─────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setMessage(null);
 
-    try {
-      if (isSystemAdmin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) throw signInError;
-        router.push('/admin');
-      } else {
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo : `${window.location.origin}/auth/callback?next=${nextPath}`,
-            shouldCreateUser: false,
-          },
-        });
-        if (otpError) throw otpError;
-        setMessage('Tautan akses telah dikirim ke email Anda. Silakan periksa inbox atau folder spam.');
+    // Memanggil Controller alih-alih mengeksekusi Supabase langsung
+    const result = await processLoginRequest(email, password, nextPath);
+
+    if (result.success) {
+      if (result.redirect) {
+        // Redirect Admin
+        router.push(result.redirect);
+      } else if (result.message) {
+        // Tampilkan pesan OTP sukses untuk Jemaat
+        setMessage(result.message);
       }
-    } catch (err: any) {
-      setError(
-        err.message.includes('Signups not allowed')
-          ? 'Email tidak terdaftar. Silakan registrasi terlebih dahulu.'
-          : err.message || 'Gagal melakukan autentikasi.'
-      );
-    } finally {
-      setLoading(false);
+    } else {
+      // Tampilkan pesan error
+      setError(result.error || "Gagal melakukan autentikasi.");
     }
+    
+    setLoading(false);
   };
 
   return (
@@ -240,9 +226,7 @@ function LoginContent() {
 
       {/* ── LEFT SIDE: Hero Image ── */}
       <div className="relative w-full md:w-1/2 h-[35vh] md:h-screen overflow-hidden z-10">
-        {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#051122]/60 to-[#051122] md:bg-gradient-to-r md:from-transparent md:to-[#051122] z-10" />
-        {/* Subtle vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,#051122_100%)] z-10 opacity-60" />
 
         <img
@@ -299,7 +283,6 @@ function LoginContent() {
             <p className="text-xs font-bold tracking-[0.4em] text-[#C5A059]/60 uppercase mb-2">
               RNHKBP KAYU PUTIH
             </p>
-            {/* Wrapper judul untuk perspective 3D */}
             <div style={{ perspective: '800px' }} className="overflow-hidden">
               <h3
                 ref={titleRef}

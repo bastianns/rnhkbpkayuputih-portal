@@ -63,48 +63,47 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- 3. FUNGSI PENDAFTARAN UTAMA (ORCHESTRATOR)
--- Menentukan apakah pendaftar langsung masuk Anggota atau masuk Karantina
-CREATE OR REPLACE FUNCTION public.fn_portal_register_anggota(
-    p_nama_lengkap TEXT, p_tanggal_lahir DATE, p_id_wijk UUID,
-    p_no_telp TEXT DEFAULT NULL, p_alamat TEXT DEFAULT NULL
-) RETURNS JSONB AS $$
+-- 3. FUNGSI PENDAFTARAN UTAMA (ORCHESTRATOR - FELLEGI-SUNTER VERSION)
+-- Selalu memasukkan data ke Karantina terlebih dahulu (Isolation) 
+-- dan menghitung skor duplikasi secara otomatis.
+CREATE OR REPLACE FUNCTION public.fn_portal_register_anggota(p_raw_data JSONB)
+RETURNS UUID AS $$
 DECLARE
-    v_target_id UUID; v_fs_score NUMERIC; v_match_status TEXT; v_new_id UUID; v_response JSONB;
+    v_quarantine_id UUID;
+    v_target_id UUID;
+    v_fs_score NUMERIC;
+    v_match_status TEXT;
 BEGIN
-    -- Jalankan precheck deduplikasi
+    -- 1. Masukkan data mentah ke tabel karantina (Data Isolation)
+    INSERT INTO public.quarantine_anggota (raw_data, status)
+    VALUES (p_raw_data, 'pending')
+    RETURNING id_quarantine INTO v_quarantine_id;
+
+    -- 2. Jalankan Identity Vetting Engine (Fellegi-Sunter Precheck)
+    -- Ekstraksi data dilakukan secara dinamis dari JSONB
     SELECT target_id, fs_score, match_status INTO v_target_id, v_fs_score, v_match_status
-    FROM public.fn_portal_dedup_precheck(p_nama_lengkap, p_tanggal_lahir, p_id_wijk);
+    FROM public.fn_portal_dedup_precheck(
+        p_raw_data->>'nama_lengkap',
+        (p_raw_data->>'tanggal_lahir')::DATE,
+        (p_raw_data->>'id_wijk')::UUID
+    );
 
-    IF v_match_status IS NULL THEN v_match_status := 'non-match'; END IF;
-
-    -- Percabangan keputusan (Branching)
-    IF v_match_status = 'non-match' THEN
-        -- Simpan langsung ke tabel Anggota
-        INSERT INTO public.anggota (nama_lengkap, tanggal_lahir, id_wijk, no_telp, alamat)
-        VALUES (p_nama_lengkap, p_tanggal_lahir, p_id_wijk, p_no_telp, p_alamat)
-        RETURNING id_anggota INTO v_new_id;
-
-        v_response := jsonb_build_object('status', 'success', 'action', 'inserted', 'id', v_new_id, 'message', 'Pendaftaran berhasil.');
-    ELSE
-        -- Simpan ke tabel Karantina untuk direview
-        INSERT INTO public.quarantine_anggota (raw_data, error_details, status)
-        VALUES (jsonb_build_object('nama_lengkap', p_nama_lengkap, 'tanggal_lahir', p_tanggal_lahir, 'id_wijk', p_id_wijk, 'no_telp', p_no_telp, 'alamat', p_alamat),
-                format('Terdeteksi %s dengan skor %s', v_match_status, v_fs_score), 'pending')
-        RETURNING id_quarantine INTO v_new_id;
-
-        -- Catat kandidat duplikat untuk Admin
+    -- 3. Branching Logic: Jika terdeteksi kemiripan, buat kandidat duplikat
+    IF v_match_status IN ('match', 'possible') THEN
         INSERT INTO public.dedup_candidate (id_anggota_a, id_quarantine_b, score, decision)
-        VALUES (v_target_id, v_new_id, v_fs_score, 'possible');
-
-        v_response := jsonb_build_object('status', 'flagged', 'action', 'quarantined', 'id', v_new_id, 'match_level', v_match_status, 'message', 'Data ditahan untuk peninjauan.');
+        VALUES (v_target_id, v_quarantine_id, v_fs_score, 'possible');
+        
+        -- Perkaya metadata karantina untuk Admin Dashboard
+        UPDATE public.quarantine_anggota 
+        SET error_details = format('Fellegi-Sunter: %s (Skor: %s)', v_match_status, v_fs_score)
+        WHERE id_quarantine = v_quarantine_id;
     END IF;
 
-    -- Catat upaya pendaftaran di Audit Log
+    -- 4. Pencatatan Audit Log (Integritas Sistem)
     INSERT INTO public.audit_log (actor_id, action, entity, entity_id, new_data)
-    VALUES (auth.uid(), 'REGISTER_ATTEMPT', 'portal_registration', v_new_id, v_response);
+    VALUES (auth.uid(), 'VETTING_REGISTER', 'quarantine_anggota', v_quarantine_id, p_raw_data);
 
-    RETURN v_response;
+    RETURN v_quarantine_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

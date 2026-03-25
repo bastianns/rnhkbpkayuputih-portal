@@ -19,22 +19,37 @@ export async function fetchVettingQueue() {
   }
 }
 
-export async function resolveQuarantineAction(id: string, action: 'approve' | 'reject', itemData?: any) {
+export async function resolveQuarantineAction(id: string, action: 'ACCEPT' | 'MERGE' | 'REJECT', itemData?: any) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    // 1. Identifikasi Candidate ID jika tindakan memerlukan resolusi deduplikasi
+    if (action === 'ACCEPT' || action === 'MERGE') {
+      const candidateId = await getCandidateIdByQuarantine(id);
+      
+      if (!candidateId && action === 'MERGE') {
+        throw new Error("Data pembanding tidak ditemukan untuk operasi MERGE.");
+      }
 
-    if (action === 'approve') {
-      if (!itemData) throw new Error("Data anggota diperlukan untuk approval.");
-      await approveQuarantineMember(itemData);
-    } else {
-      await rejectQuarantineMember(id);
+      // Jalankan Atomic Transaction via RPC
+      // Jika candidateId tidak ada (non-match murni), RPC akan menangani via logic fallback
+      await resolveDedupViaRPC(candidateId as string, action);
+    } 
+    
+    // 2. Jika REJECT, kita tetap gunakan update status sederhana (atau bisa dipindah ke RPC nanti)
+    else if (action === 'REJECT') {
+      const { error } = await supabase
+        .from('quarantine_anggota')
+        .update({ status: 'rejected' })
+        .eq('id_quarantine', id);
+      if (error) throw error;
     }
 
-    // Catat ke Audit Log
-    await logQueueResolution(user?.id, action, id);
+    // 3. Catat aktivitas di Audit Log (Controller-side Audit)
+    const { data: { user } } = await supabase.auth.getUser();
+    await logQueueResolution(user?.id, action.toLowerCase(), id);
 
     return { success: true };
   } catch (error: any) {
+    console.error("Queue Resolution Error:", error.message);
     return { success: false, error: error.message };
   }
 }

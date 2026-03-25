@@ -16,34 +16,32 @@ export async function getAllWijk() {
   return data || [];
 }
 
-export async function approveQuarantineMember(item: any) {
-  // 1. Pindahkan data ke tabel utama anggota
-  const { error: insertError } = await supabase.from('anggota').insert([{
-    id_auth: item.raw_data.id_auth,
-    nama_lengkap: item.raw_data.nama_lengkap,
-    email: item.raw_data.email,
-    no_telp: item.raw_data.no_telp,
-    tanggal_lahir: item.raw_data.tanggal_lahir,
-    alamat: item.raw_data.alamat,
-    id_wijk: item.raw_data.id_wijk,
-    is_verified: true
-  }]);
-  if (insertError) throw insertError;
+export async function resolveDedupViaRPC(candidateId: string, decision: 'ACCEPT' | 'MERGE') {
+  // ✅ MENGGUNAKAN ATOMIC TRANSACTION VIA RPC
+  // Fungsi ini menjalankan INSERT, UPDATE, dan AUDIT LOG dalam satu unit kerja di database
+  const { data, error } = await supabase.rpc('fn_portal_resolve_dedup', {
+    p_id_candidate: candidateId,
+    p_decision: decision
+  });
 
-  // 2. Update status di karantina
-  const { error: updateError } = await supabase
-    .from('quarantine_anggota')
-    .update({ status: 'approved' })
-    .eq('id_quarantine', item.id_quarantine);
-  if (updateError) throw updateError;
+  if (error) {
+    console.error('Database Error (Atomic Resolution):', error.message);
+    throw error;
+  }
+
+  return data;
 }
 
-export async function rejectQuarantineMember(id: string) {
-  const { error } = await supabase
-    .from('quarantine_anggota')
-    .update({ status: 'rejected' })
-    .eq('id_quarantine', id);
-  if (error) throw error;
+// Fungsi helper untuk mendapatkan ID Candidate dari ID Quarantine
+export async function getCandidateIdByQuarantine(quarantineId: string) {
+  const { data, error } = await supabase
+    .from('dedup_candidate')
+    .select('id_candidate')
+    .eq('id_quarantine_b', quarantineId)
+    .single();
+    
+  if (error) return null;
+  return data.id_candidate;
 }
 
 export async function logQueueResolution(actorId: string | undefined, action: string, entityId: string) {

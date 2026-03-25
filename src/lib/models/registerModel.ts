@@ -15,10 +15,16 @@ export async function getReferenceData() {
 }
 
 export async function insertQuarantineData(rawData: any, authId: string | undefined) {
-  const { error } = await supabase.from('quarantine_anggota').insert([{ 
-    raw_data: { ...rawData, id_auth: authId }, 
-    status: 'pending' 
-  }]);
+  // ✅ MEMANGGIL FELLEGI-SUNTER ENGINE VIA RPC
+  // Payload otomatis di-cast menjadi JSONB oleh Supabase
+  const { data, error } = await supabase.rpc('fn_portal_register_anggota', {
+    p_raw_data: { ...rawData, id_auth: authId }
+  });
   
-  if (error) throw error;
+  if (error) {
+    console.error('Database Error (Fellegi-Sunter Engine):', error.message);
+    throw error;
+  }
+
+  return data; // Mengembalikan UUID dari record karantina
 }

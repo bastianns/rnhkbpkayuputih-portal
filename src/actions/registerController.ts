@@ -16,7 +16,7 @@ export async function submitRegistrationForm(formData: any) {
   try {
     const emailFormatted = formData.email.toLowerCase().trim();
 
-    // 1. Identity Portaling: Buat akun Auth
+    // 1. Identity Portaling: Buat akun Auth (Supabase GoTrue)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: emailFormatted, 
       password: formData.password, 
@@ -25,16 +25,22 @@ export async function submitRegistrationForm(formData: any) {
 
     if (authError) throw authError;
 
-    // 2. Data Isolation: Buang password dan consent_pdp dari payload
+    // 2. Data Isolation & Sanitization
+    // Membuang password dan consent_pdp dari payload yang akan disimpan ke DB
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, consent_pdp, ...rawData } = formData;
-    rawData.email = emailFormatted; 
+    rawData.email = emailFormatted;
+    rawData.created_at = new Date().toISOString();
 
-    // 3. Simpan ke Antrean Karantina
+    // 3. Panggil Model untuk memicu RPC Identity Vetting Engine (Fellegi-Sunter)
     await insertQuarantineData(rawData, authData.user?.id);
 
-    return { success: true };
+    return { 
+      success: true, 
+      message: 'Pendaftaran berhasil. Data Anda telah masuk ke antrean vetting untuk diverifikasi oleh admin.' 
+    };
   } catch (error: any) {
-    // Menangkap authError dan mengirimkan pesan galat ke View
-    return { success: false, error: error.message };
+    console.error("Registration Error:", error.message);
+    return { success: false, error: error.message || 'Terjadi kesalahan saat pendaftaran.' };
   }
 }

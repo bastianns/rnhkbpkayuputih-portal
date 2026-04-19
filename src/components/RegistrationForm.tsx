@@ -68,7 +68,9 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
       if (authError) throw new Error(authError.message);
 
       const authId = authData.user?.id;
-      const { password, consent_pdp, ...rawData } = formData;
+      
+      // Jangan buang consent_pdp, biarkan masuk ke raw_data sebagai bukti audit
+      const { password, ...rawData } = formData;
       const finalPayload = { ...rawData, email: emailFormatted, id_auth: authId };
 
       const { error: submitError } = await supabase

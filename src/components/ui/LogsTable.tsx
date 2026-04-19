@@ -1,8 +1,8 @@
 import { Clock, User, ShieldCheck } from 'lucide-react';
 
-export function LogsTable({ logs }: { logs: any[] }) {
+export function LogsTable({ logs, prefixCls = 'rc-table' }: { logs: any[]; prefixCls?: string }) {
   return (
-    <div className="bg-[#0a192f]/40 backdrop-blur-xl border border-[#C5A059]/20 rounded-[2.5rem] shadow-2xl overflow-hidden">
+    <div className={`${prefixCls}-container bg-[#0a192f]/40 backdrop-blur-xl border border-[#C5A059]/20 rounded-[2.5rem] shadow-2xl overflow-hidden`}>
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full text-left">
           <thead className="bg-white/5 border-b border-[#C5A059]/10">

@@ -6,16 +6,17 @@ interface RecordsTableProps {
   loading: boolean;
   records: any[];
   searchTerm: string;
+  prefixCls?: string;
 }
 
-export function RecordsTable({ loading, records, searchTerm }: RecordsTableProps) {
+export function RecordsTable({ loading, records, searchTerm, prefixCls = 'rc-table' }: RecordsTableProps) {
   // ── FITUR: Tactile Spring Feedback ──
   const handleSpringBtn = (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => {
     animate(e.currentTarget, { scale: state === 'down' ? 0.95 : 1, duration: 400, ease: spring({ bounce: 0.45 }) });
   };
 
   return (
-    <div className="bg-[#0a192f]/40 backdrop-blur-xl border border-[#C5A059]/20 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden">
+    <div className={`${prefixCls}-container bg-[#0a192f]/40 backdrop-blur-xl border border-[#C5A059]/20 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden`}>
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full text-left">
           <thead className="bg-white/5 border-b border-[#C5A059]/10">

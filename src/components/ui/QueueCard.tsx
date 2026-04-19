@@ -6,15 +6,16 @@ interface QueueCardProps {
   loadingId: string | null;
   onAction: (id: string, action: 'approve' | 'reject') => void;
   onSpring: (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => void;
+  prefixCls?: string;
 }
 
-export function QueueCard({ item, wijkName, loadingId, onAction, onSpring }: QueueCardProps) {
+export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefixCls = 'rc-card' }: QueueCardProps) {
   const isLoading = loadingId === item.id_quarantine;
 
   return (
     <div 
       id={`queue-card-${item.id_quarantine}`}
-      className="anim-queue-card bg-[#0a192f]/60 backdrop-blur-xl p-8 rounded-[2.5rem] border border-[#C5A059]/20 shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col lg:flex-row gap-8 justify-between items-start transition-all hover:border-[#C5A059]/50"
+      className={`${prefixCls}-container anim-queue-card bg-[#0a192f]/60 backdrop-blur-xl p-8 rounded-[2.5rem] border border-[#C5A059]/20 shadow-[0_15px_40px_rgba(0,0,0,0.4)] flex flex-col lg:flex-row gap-8 justify-between items-start transition-all hover:border-[#C5A059]/50`}
     >
       <div className="flex-1 w-full space-y-6 text-left">
         <div className="flex items-center gap-5 border-b border-white/5 pb-6">

@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Info, CheckCircle } from 'lucide-react';
 import { useRegistrationData } from '@/hooks/useRegistrationData';
 import { RegistrationStep1 } from './RegistrationStep1';
 import { RegistrationStep2 } from './RegistrationStep2';
 import { RegistrationStep3 } from './RegistrationStep3';
+import { submitRegistrationForm } from '@/actions/registerController';
 
 const STEPS = [
   { id: 1, title: 'Member Details', subtitle: 'Step 1' },
@@ -42,8 +42,9 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
   };
 
   const handleNextStep1 = () => {
-    if (!formData.nama_lengkap || !formData.email || !formData.password || !formData.id_wijk) {
-      setError("Mohon lengkapi Nama, Email, Password, dan Wijk sebelum melanjutkan.");
+    const { nama_lengkap, email, password, id_wijk, tanggal_lahir } = formData;
+    if (!nama_lengkap || !email || !password || !id_wijk || !tanggal_lahir || tanggal_lahir.trim() === "") {
+      setError("Mohon lengkapi semua data identitas termasuk Tanggal Lahir.");
       return;
     }
     setError(null); setCurrentStep(2);
@@ -60,25 +61,14 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
     setLoading(true); setError(null);
 
     try {
-      const emailFormatted = formData.email.toLowerCase().trim();
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: emailFormatted, password: formData.password,
-        options: { data: { full_name: formData.nama_lengkap } }
-      });
-      if (authError) throw new Error(authError.message);
-
-      const authId = authData.user?.id;
+      // Panggil Server Action (Controller) - Semua logika Auth & DB ada di sana
+      const result = await submitRegistrationForm(formData);
       
-      // Jangan buang consent_pdp, biarkan masuk ke raw_data sebagai bukti audit
-      const { password, ...rawData } = formData;
-      const finalPayload = { ...rawData, email: emailFormatted, id_auth: authId };
-
-      const { error: submitError } = await supabase
-        .from('quarantine_anggota')
-        .insert([{ raw_data: finalPayload, status: 'pending' }]);
-
-      if (submitError) throw submitError;
-      setSubmitted(true);
+      if (result.success) {
+        setSubmitted(true);
+      } else {
+        throw new Error(result.error);
+      }
     } catch (err: any) {
       setError(err.message || "Gagal mengirim data pendaftaran.");
     } finally {

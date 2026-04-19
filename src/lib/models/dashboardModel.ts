@@ -1,16 +1,20 @@
-import { supabase } from '@/lib/supabase';
+// PENTING: Menggunakan createClient dari supabaseServer (bukan browser client)
+// agar cookie sesi server-side terbaca dengan benar di Server Actions & model layer.
+import { createClient } from '@/lib/supabaseServer';
 
 export async function getMemberDashboardData(email: string, authId: string) {
+  const supabase = await createClient();
+
   // 1. Coba dapatkan Profil Anggota Tetap (SSOT) berdasarkan id_auth (paling akurat)
-  let { data: member, error: memberErr } = await supabase
+  let { data: member } = await supabase
     .from('anggota')
     .select('*, wijk(nama_wijk)')
     .eq('id_auth', authId)
     .maybeSingle();
 
-  // 2. Jika tidak ketemu berdasarkan id_auth, coba email (fallback)
+  // 2. Fallback: cari di anggota tetap berdasarkan email
   if (!member) {
-    let { data: memberByEmail } = await supabase
+    const { data: memberByEmail } = await supabase
       .from('anggota')
       .select('*, wijk(nama_wijk)')
       .eq('email', email)
@@ -18,42 +22,43 @@ export async function getMemberDashboardData(email: string, authId: string) {
     member = memberByEmail;
   }
 
-  // 3. Jika masih tidak ada di anggota tetap, cek di Karantina berdasarkan JSONB
+  // 3. Fallback: cari di Karantina menggunakan operator ->> (PostgreSQL JSONB text extraction)
   if (!member) {
-    const { data: qMember } = await supabase
+    // 3a. Cari berdasarkan id_auth yang disuntikkan trigger ke raw_data
+    const { data: qByAuthId } = await supabase
       .from('quarantine_anggota')
       .select('*')
-      .contains('raw_data', { id_auth: authId })
+      .filter('raw_data->>id_auth', 'eq', authId)
       .maybeSingle();
 
-    if (qMember) {
+    if (qByAuthId) {
       member = {
         id_anggota: null,
-        nama_lengkap: qMember.raw_data.nama_lengkap,
-        email: qMember.raw_data.email,
+        nama_lengkap: qByAuthId.raw_data.nama_lengkap,
+        email: qByAuthId.raw_data.email ?? email,
         is_verified: false,
-        created_at: qMember.created_at,
+        created_at: qByAuthId.created_at,
         wijk: { nama_wijk: 'Dalam Antrean Vetting' }
       };
     } else {
-      // Final attempt: cari berdasarkan email dengan contains JSONB
-      const { data: qMemberByEmail } = await supabase
+      // 3b. Fallback terakhir: cari berdasarkan email di raw_data
+      const { data: qByEmail } = await supabase
         .from('quarantine_anggota')
         .select('*')
-        .contains('raw_data', { email: email })
+        .filter('raw_data->>email', 'eq', email)
         .maybeSingle();
-      
-      if (qMemberByEmail) {
+
+      if (qByEmail) {
         member = {
           id_anggota: null,
-          nama_lengkap: qMemberByEmail.raw_data.nama_lengkap,
-          email: qMemberByEmail.raw_data.email,
+          nama_lengkap: qByEmail.raw_data.nama_lengkap,
+          email: qByEmail.raw_data.email ?? email,
           is_verified: false,
-          created_at: qMemberByEmail.created_at,
+          created_at: qByEmail.created_at,
           wijk: { nama_wijk: 'Dalam Antrean Vetting' }
         };
       } else {
-        // PROFIL PLACEHOLDER (Bypass Loop Redirect)
+        // PROFIL PLACEHOLDER — fallback jika tidak ditemukan di mana pun.
         member = {
           id_anggota: null,
           nama_lengkap: 'Jemaat RNHKBP',
@@ -66,40 +71,44 @@ export async function getMemberDashboardData(email: string, authId: string) {
     }
   }
 
-  // 4. Dapatkan Riwayat Partisipasi (Hanya jika sudah jadi anggota tetap)
-  const activities = member.id_anggota ? (await supabase
-    .from('riwayat_partisipasi')
-    .select(`*, katalog_peran (bobot_kontribusi)`)
-    .eq('id_anggota', member.id_anggota)).data : [];
+  // 4. Riwayat Partisipasi (hanya untuk anggota tetap yang sudah punya id_anggota)
+  const activities = member.id_anggota
+    ? (await supabase
+        .from('riwayat_partisipasi')
+        .select('*, katalog_peran (bobot_kontribusi)')
+        .eq('id_anggota', member.id_anggota)).data
+    : [];
 
-  // 3. Dapatkan Live Event
+  // 5. Live Event — pakai .maybeSingle() agar tidak throw error jika tidak ada event aktif
   const { data: liveEvent } = await supabase
     .from('kegiatan')
     .select('*, kategori_kegiatan(nama_kategori)')
     .eq('is_open', true)
     .order('tanggal_mulai', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
-  // 4. Dapatkan Katalog Peran
+  // 6. Katalog Peran
   const { data: perans } = await supabase.from('katalog_peran').select('*');
 
-  return { 
-    member, 
-    activities: activities || [], 
-    liveEvent: liveEvent || null, 
-    perans: perans || [] 
+  return {
+    member,
+    activities: activities || [],
+    liveEvent: liveEvent || null,
+    perans: perans || []
   };
 }
 
 export async function processCheckinTransaction(memberId: string, eventId: string, roleId: string, actorId: string) {
+  const supabase = await createClient();
+
   // Verifikasi ganda (Double-booking prevention)
   const { data: existing } = await supabase
     .from('riwayat_partisipasi')
     .select('id_partisipasi')
     .eq('id_anggota', memberId)
     .eq('id_kegiatan', eventId)
-    .single();
+    .maybeSingle();
   if (existing) throw new Error('Sudah absen di kegiatan ini.');
 
   // Insert Riwayat Partisipasi
@@ -123,16 +132,16 @@ export async function processCheckinTransaction(memberId: string, eventId: strin
 }
 
 export async function getMemberHistoryByEmail(email: string) {
-  // 1. Dapatkan Profil Anggota (untuk ID-nya)
+  const supabase = await createClient();
+
   const { data: member, error: memberErr } = await supabase
     .from('anggota')
     .select('*')
     .eq('email', email)
-    .single();
+    .maybeSingle();
 
   if (memberErr || !member) throw new Error('Profil SSOT tidak ditemukan.');
 
-  // 2. Dapatkan Riwayat Partisipasi Lengkap
   const { data: historyData, error: historyErr } = await supabase
     .from('riwayat_partisipasi')
     .select('*, kegiatan (nama_kegiatan, tanggal_mulai), katalog_peran (nama_peran, bobot_kontribusi)')

@@ -19,6 +19,7 @@ export function RegistrationStep1({ formData, wijks, onChange, onNext, prefixCls
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Row 1 */}
         <InputBlock label="Nama Lengkap (KTP)" name="nama_lengkap" icon={<User size={16}/>} value={formData.nama_lengkap} onChange={onChange} prefixCls={prefixCls} />
         
         <div className="space-y-2">
@@ -33,10 +34,21 @@ export function RegistrationStep1({ formData, wijks, onChange, onNext, prefixCls
           </div>
         </div>
 
+        {/* Row 2 */}
         <InputBlock label="Email Aktif" name="email" type="email" icon={<Mail size={16}/>} value={formData.email} onChange={onChange} prefixCls={prefixCls} />
         <InputBlock label="Password Portal" name="password" type="password" icon={<Lock size={16}/>} value={formData.password} onChange={onChange} prefixCls={prefixCls} />
+        
+        {/* Row 3 */}
         <InputBlock label="No. WhatsApp" name="no_telp" type="tel" icon={<Phone size={16}/>} value={formData.no_telp} onChange={onChange} prefixCls={prefixCls} />
-        <InputBlock label="Tanggal Lahir" name="tanggal_lahir" type="date" icon={<Calendar size={16}/>} value={formData.tanggal_lahir} onChange={onChange} prefixCls={prefixCls} />
+        <InputBlock 
+          label="Tanggal Lahir" 
+          name="tanggal_lahir" 
+          type="date" 
+          icon={<Calendar size={16}/>} 
+          value={formData.tanggal_lahir} 
+          onChange={onChange} 
+          prefixCls={prefixCls} 
+        />
       </div>
 
       <div className="space-y-2 pt-2">
@@ -57,7 +69,14 @@ function InputBlock({ label, name, type = "text", value, onChange, icon, prefixC
       <label className={`text-[10px] font-bold text-[#c5a059] uppercase tracking-[0.2em] ${prefixCls}-label`}>{label}</label>
       <div className="relative group">
         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#c5a059]/50 group-focus-within:text-[#c5a059] transition-colors pointer-events-none">{icon}</div>
-        <input required name={name} type={type} value={value} onChange={onChange} className="w-full bg-[#0a192f]/30 border border-[#c5a059]/30 rounded-md pl-12 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#c5a059] focus:bg-[#0a192f]/60 transition-colors placeholder:text-white/20" />
+        <input 
+          required 
+          name={name} 
+          type={type} 
+          value={value} 
+          onChange={onChange} 
+          className="w-full bg-[#0a192f]/30 border border-[#c5a059]/30 rounded-md pl-12 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-[#c5a059] focus:bg-[#0a192f]/60 transition-colors placeholder:text-white/20 [color-scheme:dark]" 
+        />
       </div>
     </div>
   );

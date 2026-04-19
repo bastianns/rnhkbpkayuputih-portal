@@ -1,9 +1,9 @@
 "use server";
 
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabaseServer';
 import { 
   getPendingQuarantine, getAllWijk, 
-  approveQuarantineMember, rejectQuarantineMember, logQueueResolution 
+  resolveDedupViaRPC, getCandidateIdByQuarantine, logQueueResolution 
 } from '@/lib/models/queueModel';
 
 export async function fetchVettingQueue() {
@@ -21,6 +21,8 @@ export async function fetchVettingQueue() {
 
 export async function resolveQuarantineAction(id: string, action: 'ACCEPT' | 'MERGE' | 'REJECT', itemData?: any) {
   try {
+    const supabase = await createClient();
+    
     // 1. Identifikasi Candidate ID jika tindakan memerlukan resolusi deduplikasi
     if (action === 'ACCEPT' || action === 'MERGE') {
       const candidateId = await getCandidateIdByQuarantine(id);
@@ -30,11 +32,10 @@ export async function resolveQuarantineAction(id: string, action: 'ACCEPT' | 'ME
       }
 
       // Jalankan Atomic Transaction via RPC
-      // Jika candidateId tidak ada (non-match murni), RPC akan menangani via logic fallback
       await resolveDedupViaRPC(candidateId as string, action);
     } 
     
-    // 2. Jika REJECT, kita tetap gunakan update status sederhana (atau bisa dipindah ke RPC nanti)
+    // 2. Jika REJECT
     else if (action === 'REJECT') {
       const { error } = await supabase
         .from('quarantine_anggota')
@@ -43,7 +44,7 @@ export async function resolveQuarantineAction(id: string, action: 'ACCEPT' | 'ME
       if (error) throw error;
     }
 
-    // 3. Catat aktivitas di Audit Log (Controller-side Audit)
+    // 3. Catat aktivitas di Audit Log
     const { data: { user } } = await supabase.auth.getUser();
     await logQueueResolution(user?.id, action.toLowerCase(), id);
 

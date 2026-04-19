@@ -36,23 +36,30 @@ export default function MemberMobileDashboard() {
   const [authId, setAuthId] = useState<string>('');
 
   const fetchDashboardData = async () => {
-      setLoading(true);
-      const result = await initializeDashboard();
-      
-      if (result.success) {
-        const data = result as any; 
-        
-        setMember(data.member);
-        setActivities(data.activities || []);
-        setActiveEvent(data.liveEvent);
-        setPerans(data.perans || []);
-        if(data.authId) setAuthId(data.authId);
-      } else {
-        console.error(result.error);
-        router.push('/login');
+    setLoading(true);
+    const result = await initializeDashboard();
+
+    if (result.success) {
+      const data = result as any; 
+
+      // SECURITY CHECK: Pastikan ID di URL cocok dengan ID Sesi (authId atau member.id_anggota)
+      if (id !== data.authId && id !== data.member.id_anggota) {
+        console.warn("Security Alert: Unauthorized access attempt to ID", id);
+        router.push('/dashboard');
+        return;
       }
-      setLoading(false);
-    };
+
+      setMember(data.member);
+      setActivities(data.activities || []);
+      setActiveEvent(data.liveEvent);
+      setPerans(data.perans || []);
+      if(data.authId) setAuthId(data.authId);
+    } else {
+      console.error(result.error);
+      router.push('/login');
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -96,7 +103,6 @@ export default function MemberMobileDashboard() {
     setIsCheckingIn(true);
     setCheckInMessage(null);
     
-    // Panggil Controller, bukan Supabase DB
     const result = await submitDashboardCheckin(member.id_anggota, activeEvent.id_kegiatan, selectedPeran, authId);
     
     if (result.success) {

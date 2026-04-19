@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from '@/lib/supabaseServer';
 
 export async function getVerifiedAnggotaCount() {
+  const supabase = await createClient();
   const { count, error } = await supabase
     .from("anggota")
     .select("*", { count: "exact", head: true })
@@ -11,6 +12,7 @@ export async function getVerifiedAnggotaCount() {
 }
 
 export async function getPendingQuarantineCount() {
+  const supabase = await createClient();
   const { count, error } = await supabase
     .from("quarantine_anggota")
     .select("*", { count: "exact", head: true })
@@ -21,6 +23,7 @@ export async function getPendingQuarantineCount() {
 }
 
 export async function getWijkDistributionData() {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("wijk")
     .select(`

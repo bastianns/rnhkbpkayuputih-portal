@@ -1,16 +1,17 @@
 "use server";
 
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabaseServer';
 
 export async function processLoginRequest(email: string, password?: string, redirectPath: string = '/dashboard') {
   try {
+    const supabase = await createClient();
     const formattedEmail = email.toLowerCase().trim();
 
     if (!password) {
       return { success: false, error: "Password wajib diisi untuk masuk ke sistem." };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ 
+    const { error } = await supabase.auth.signInWithPassword({ 
       email: formattedEmail, 
       password 
     });
@@ -24,8 +25,8 @@ export async function processLoginRequest(email: string, password?: string, redi
     };
 
   } catch (error: any) {
-    const errorMessage = error.message.includes('Signups not allowed')
-      ? 'Email tidak terdaftar. Silakan registrasi terlebih dahulu.'
+    const errorMessage = error.message.includes('Invalid login credentials')
+      ? 'Email atau Password salah.'
       : error.message || 'Gagal melakukan autentikasi.';
       
     return { success: false, error: errorMessage };

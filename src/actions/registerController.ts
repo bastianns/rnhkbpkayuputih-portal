@@ -1,7 +1,7 @@
 "use server";
 
-import { supabase } from '@/lib/supabase';
-import { getReferenceData, insertQuarantineData } from '@/lib/models/registerModel';
+import { createClient } from '@/lib/supabaseServer';
+import { getReferenceData } from '@/lib/models/registerModel';
 
 export async function fetchRegistrationOptions() {
   try {
@@ -14,10 +14,10 @@ export async function fetchRegistrationOptions() {
 
 export async function submitRegistrationForm(formData: any) {
   try {
+    const supabase = await createClient();
     const emailFormatted = formData.email.toLowerCase().trim();
 
     // 1. Identity Portaling: Buat akun Auth & Kirim semua data profil ke Metadata
-    // Database Trigger (fn_handle_new_user_registration) akan mengambil data dari sini otomatis
     const { error: authError } = await supabase.auth.signUp({
       email: emailFormatted, 
       password: formData.password, 

@@ -3,75 +3,97 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Loader2, ShieldCheck } from 'lucide-react';
-// INTEGRASI POIN 3: Import helper audit log
+import { Loader2, Cross, ShieldCheck } from 'lucide-react';
 import { createAuditLog } from '@/lib/audit';
+import { motion } from 'motion/react';
 
 /**
- * Dashboard Bridge: Menangani pengalihan otomatis dari /dashboard 
- * ke rute dinamis /dashboard/[id_anggota] untuk menghindari error 404.
+ * Dashboard Bridge: Gerbang estetik yang menghubungkan sesi login
+ * dengan data profil jemaat di RNHKBP Kayu Putih.
  */
 export default function DashboardBridge() {
   const router = useRouter();
 
   useEffect(() => {
     async function syncAndRedirect() {
-      // 1. Ambil data user yang sedang login dari Supabase Auth
+      // Tunggu sebentar untuk memastikan cookie tersinkronisasi
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // 2. INTEGRASI POIN 3: Catat akses masuk
-        await createAuditLog('ACCESS_DASHBOARD_INDEX', 'auth', user.id, null, { device: navigator.userAgent });
+        await createAuditLog('ACCESS_DASHBOARD_BRIDGE', 'auth', user.id, null, { device: navigator.userAgent });
 
-        // 3. Cek apakah user ada di anggota (SSOT)
-        const { data: member } = await supabase.from('anggota').select('id_anggota').eq('id_auth', user.id).maybeSingle();
+        const { data: member } = await supabase
+          .from('anggota')
+          .select('id_anggota')
+          .eq('id_auth', user.id)
+          .maybeSingle();
 
         if (member) {
-          // Jika anggota tetap, arahkan ke dashboard dengan ID anggota
           router.push(`/dashboard/${member.id_anggota}`);
         } else {
-          // Jika masih di karantina, arahkan ke dashboard dengan ID auth (sebagai placeholder)
+          // Placeholder untuk user yang baru daftar (masih di karantina)
           router.push(`/dashboard/${user.id}`);
         }
       } else {
-        // 4. Jika tidak ada session, kembalikan ke halaman login
         router.push('/login');
       }
     }
 
-    syncAndRedirect();
+    const timer = setTimeout(syncAndRedirect, 500);
+    return () => clearTimeout(timer);
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] flex flex-col items-center justify-center p-10 text-center font-sans">
-      {/* Branding Logo Premium */}
-      <div className="mb-8 animate-pulse text-left">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#1e40af] p-2 rounded-xl text-white shadow-lg">
-            <ShieldCheck size={28} />
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="font-black text-2xl tracking-tighter text-[#0f172a]">SSOT</span>
-            <span className="text-[10px] font-bold text-[#f59e0b] uppercase tracking-[0.3em]">Portal Jemaat</span>
-          </div>
-        </div>
+    <main className="min-h-screen bg-[#050c18] flex flex-col items-center justify-center p-6 text-center font-sans relative overflow-hidden">
+      {/* Background Decorative Rays */}
+      <div className="absolute inset-0 opacity-10 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vmax] h-[100vmax] bg-[radial-gradient(circle,#c5a059_0%,transparent_70%)] blur-3xl"></div>
       </div>
 
-      {/* Loading State Premium */}
-      <div className="space-y-4">
-        <div className="relative">
-          <div className="absolute inset-0 bg-blue-100 rounded-full blur-xl opacity-20 animate-pulse"></div>
-          <Loader2 className="animate-spin text-[#1e40af] relative z-10 mx-auto" size={48} />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8 }}
+        className="relative z-10 space-y-8"
+      >
+        {/* Ornate Logo */}
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative w-20 h-20 flex items-center justify-center">
+            <div className="absolute inset-0 border-2 border-[#c5a059] rotate-45 shadow-[0_0_30px_rgba(197,160,89,0.2)]"></div>
+            <Cross className="text-[#c5a059] relative z-10 w-8 h-8" />
+          </div>
+          
+          <div className="space-y-1">
+            <h1 className="font-serif text-2xl text-white tracking-[0.2em] uppercase italic">RNHKBP Kayu Putih</h1>
+            <p className="text-[#c5a059] text-[10px] font-bold tracking-[0.4em] uppercase opacity-70">Identity Portal</p>
+          </div>
         </div>
-        <div className="space-y-2">
-          <p className="text-[10px] font-black text-[#0f172a] uppercase tracking-[0.4em]">
-            Sinkronisasi Identitas
-          </p>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic leading-relaxed max-w-[200px] mx-auto">
-            Menghubungkan sesi Anda dengan basis data pusat RNHKBP Kayu Putih...
-          </p>
+
+        {/* Loading State */}
+        <div className="space-y-4 max-w-xs mx-auto pt-4">
+          <div className="relative flex justify-center">
+            <Loader2 className="animate-spin text-[#c5a059]/40 absolute" size={56} strokeWidth={1} />
+            <ShieldCheck className="text-[#c5a059] relative z-10 mt-3" size={24} />
+          </div>
+          
+          <div className="space-y-2">
+            <p className="text-[10px] font-black text-white uppercase tracking-[0.3em] animate-pulse">
+              Authenticating Identity
+            </p>
+            <div className="h-[1px] w-12 bg-[#c5a059]/30 mx-auto"></div>
+            <p className="text-[9px] font-serif italic text-white/40 leading-relaxed tracking-wider">
+              Menyelaraskan sesi Anda dengan basis data pusat...
+            </p>
+          </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+
+      {/* Footer Minimalist */}
+      <footer className="absolute bottom-10 left-0 w-full text-center">
+        <p className="text-[8px] font-bold text-white/10 uppercase tracking-[0.5em]">
+          Single Source of Truth System
+        </p>
+      </footer>
+    </main>
   );
 }

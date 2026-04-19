@@ -1,18 +1,28 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
 import RegistrationForm from '../components/RegistrationForm';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
 import { 
   ShieldCheck, 
   ArrowRight, 
-  CheckCircle, 
   Fingerprint,
   Users,
   Lock,
-  LogIn
+  LogIn,
+  LayoutDashboard
 } from 'lucide-react';
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+    });
+  }, []);
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f6f7f8] font-sans selection:bg-blue-100 selection:text-blue-700 text-left">
       
@@ -24,7 +34,7 @@ export default function Home() {
 
       <main className="relative z-10 flex flex-col items-center px-4 py-12 md:px-10 lg:px-40">
         
-        {/* Navigation Header Updated */}
+        {/* Navigation Header */}
         <nav className="w-full max-w-[1280px] flex justify-between items-center mb-16 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-2.5">
             <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-200">
@@ -41,11 +51,20 @@ export default function Home() {
           </div>
           
           <Link 
-            href="/login" 
+            href={isLoggedIn ? "/dashboard" : "/login"} 
             className="text-xs font-black text-[#0e141b] hover:text-blue-600 transition-all flex items-center gap-2 bg-white px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md"
           >
-            <LogIn size={14} />
-            Masuk ke Dashboard
+            {isLoggedIn ? (
+              <>
+                <LayoutDashboard size={14} />
+                Dashboard Anda
+              </>
+            ) : (
+              <>
+                <LogIn size={14} />
+                Akses Anggota
+              </>
+            )}
             <ArrowRight size={14} />
           </Link>
         </nav>

@@ -1,6 +1,6 @@
 "use server";
 
-import { supabase } from '@/lib/supabase'; // Untuk auth di server
+import { createClient } from '@/lib/supabaseServer';
 import { 
   getEventsList, getCategoriesList, getEventAndAttendance, 
   insertCategory, insertEventData, updateEventStatus, logAuditData 
@@ -30,6 +30,7 @@ export async function toggleGateStatus(eventId: string, currentStatus: boolean) 
 
 export async function createQuickCategory(namaKategori: string) {
   try {
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const newCat = await insertCategory(namaKategori);
     
@@ -42,6 +43,7 @@ export async function createQuickCategory(namaKategori: string) {
 
 export async function createNewEvent(formData: any) {
   try {
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const payload = {
       nama_kegiatan: formData.nama_kegiatan,

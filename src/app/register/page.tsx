@@ -114,8 +114,8 @@ export default function RegistrationPage() {
   };
 
   const handleNext = (nextStep: number) => {
-    if (currentStep === 1 && (!formData.nama_lengkap || !formData.email || !formData.password || !formData.id_wijk)) {
-      setError("Mohon lengkapi data identitas utama."); return;
+    if (currentStep === 1 && (!formData.nama_lengkap || !formData.email || !formData.password || !formData.id_wijk || !formData.tanggal_lahir)) {
+      setError("Mohon lengkapi data identitas utama termasuk Tanggal Lahir."); return;
     }
     setError(null);
     setCurrentStep(nextStep);
@@ -193,13 +193,18 @@ export default function RegistrationPage() {
                 <InputBlock label="Nama (KTP)" name="nama_lengkap" value={formData.nama_lengkap} onChange={handleInputChange} icon={<User size={14}/>} />
                 <div className="space-y-2 anim-input">
                   <label className="text-[9px] font-bold text-[#c5a059] uppercase tracking-widest">Wijk</label>
-                  <select name="id_wijk" value={formData.id_wijk} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3.5 text-sm text-white focus:border-[#c5a059] outline-none appearance-none">
-                    <option value="" className="bg-[#050c18]">-- Pilih --</option>
-                    {wijks.map(w => <option key={w.id_wijk} value={w.id_wijk} className="bg-[#050c18]">{w.nama_wijk}</option>)}
-                  </select>
+                  <div className="relative">
+                    <select name="id_wijk" value={formData.id_wijk} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-3.5 text-sm text-white focus:border-[#c5a059] outline-none appearance-none">
+                      <option value="" className="bg-[#050c18]">-- Pilih --</option>
+                      {wijks.map(w => <option key={w.id_wijk} value={w.id_wijk} className="bg-[#050c18]">{w.nama_wijk}</option>)}
+                    </select>
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={14} />
+                  </div>
                 </div>
                 <InputBlock label="Email Identity" name="email" type="email" value={formData.email} onChange={handleInputChange} icon={<Mail size={14}/>} />
                 <InputBlock label="Secure Password" name="password" type="password" value={formData.password} onChange={handleInputChange} icon={<Lock size={14}/>} />
+                <InputBlock label="No. WhatsApp" name="no_telp" type="tel" value={formData.no_telp} onChange={handleInputChange} icon={<Phone size={14}/>} />
+                <InputBlock label="Tanggal Lahir" name="tanggal_lahir" type="date" value={formData.tanggal_lahir} onChange={handleInputChange} icon={<Calendar size={14}/>} />
               </div>
             )}
 

@@ -20,17 +20,19 @@ export default function DashboardBridge() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // 2. INTEGRASI POIN 3: Catat akses masuk ke dashboard index
-        await createAuditLog(
-          'ACCESS_DASHBOARD_INDEX',
-          'anggota',
-          user.id,
-          null,
-          { device: navigator.userAgent }
-        );
+        // 2. INTEGRASI POIN 3: Catat akses masuk
+        await createAuditLog('ACCESS_DASHBOARD_INDEX', 'auth', user.id, null, { device: navigator.userAgent });
 
-        // 3. Arahkan ke rute dinamis sesuai ID user (Penyelesaian 404)
-        router.push(`/dashboard/${user.id}`);
+        // 3. Cek apakah user ada di anggota (SSOT)
+        const { data: member } = await supabase.from('anggota').select('id_anggota').eq('id_auth', user.id).maybeSingle();
+
+        if (member) {
+          // Jika anggota tetap, arahkan ke dashboard dengan ID anggota
+          router.push(`/dashboard/${member.id_anggota}`);
+        } else {
+          // Jika masih di karantina, arahkan ke dashboard dengan ID auth (sebagai placeholder)
+          router.push(`/dashboard/${user.id}`);
+        }
       } else {
         // 4. Jika tidak ada session, kembalikan ke halaman login
         router.push('/login');

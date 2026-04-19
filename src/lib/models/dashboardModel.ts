@@ -1,19 +1,41 @@
 import { supabase } from '@/lib/supabase';
 
 export async function getMemberDashboardData(email: string) {
-  // 1. Dapatkan Profil Anggota
-  const { data: member, error: memberErr } = await supabase
+  // 1. Coba dapatkan Profil Anggota Tetap (SSOT)
+  let { data: member, error: memberErr } = await supabase
     .from('anggota')
     .select('*, wijk(nama_wijk)')
     .eq('email', email)
     .single();
-  if (memberErr || !member) throw new Error("Profil SSOT tidak ditemukan.");
 
-  // 2. Dapatkan Riwayat Partisipasi
-  const { data: activities } = await supabase
+  // 2. Jika tidak ada di anggota tetap, cek di Karantina
+  if (memberErr || !member) {
+    const { data: qMember } = await supabase
+      .from('quarantine_anggota')
+      .select('*')
+      .filter('raw_data->>email', 'eq', email)
+      .maybeSingle();
+
+    if (qMember) {
+      // Mapping data karantina agar struktur minimalnya sama dengan objek member
+      member = {
+        id_anggota: null, // Belum ada ID tetap
+        nama_lengkap: qMember.raw_data.nama_lengkap,
+        email: qMember.raw_data.email,
+        is_verified: false,
+        created_at: qMember.created_at,
+        wijk: { nama_wijk: 'Dalam Antrean Vetting' }
+      };
+    } else {
+      throw new Error("Identitas tidak ditemukan di sistem.");
+    }
+  }
+
+  // 3. Dapatkan Riwayat Partisipasi (Hanya jika sudah jadi anggota tetap)
+  const activities = member.id_anggota ? (await supabase
     .from('riwayat_partisipasi')
     .select(`*, katalog_peran (bobot_kontribusi)`)
-    .eq('id_anggota', member.id_anggota);
+    .eq('id_anggota', member.id_anggota)).data : [];
 
   // 3. Dapatkan Live Event
   const { data: liveEvent } = await supabase

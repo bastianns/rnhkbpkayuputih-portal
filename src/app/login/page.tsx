@@ -309,20 +309,16 @@ function LoginContent() {
               icon={<Mail size={18} />}
             />
 
-            {/* Password Field — hanya tampil jika admin */}
-            {isSystemAdmin && (
-              <div className="animate-in fade-in slide-in-from-left-4">
-                <InputField
-                  label="Admin Credentials"
-                  type="password"
-                  value={password}
-                  onChange={setPassword}
-                  placeholder="••••••••"
-                  icon={<Lock size={18} />}
-                  isAdmin
-                />
-              </div>
-            )}
+            {/* Password Field — Kini selalu tampil untuk semua pengguna */}
+            <InputField
+              label="Secure Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              icon={<Lock size={18} />}
+              isAdmin={isSystemAdmin}
+            />
 
             <button
               ref={btnRef}
@@ -337,7 +333,7 @@ function LoginContent() {
                 <Loader2 className="animate-spin" size={18} />
               ) : (
                 <>
-                  {isSystemAdmin ? 'Administrator Sign In' : 'Request Access Link'}
+                  Sign In to Identity
                   <ArrowRight size={14} />
                 </>
               )}

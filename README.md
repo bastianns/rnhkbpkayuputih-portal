@@ -34,7 +34,7 @@ Portal Manajemen Data RNHKBP (Naposobulung) adalah sistem terpadu untuk pengelol
 
 ### A. Untuk Anggota / Jemaat
 1. **Registrasi**: Buka halaman `/register`, lengkapi identitas, pilih Wijk, dan setujui UU PDP.
-2. **Login**: Setelah akun divalidasi admin, login melalui `/login` menggunakan email terdaftar.
+2. **Login**: Setelah akun divalidasi admin, login melalui `/login` menggunakan email dan password yang Anda buat saat registrasi.
 3. **Dashboard**: Lihat statistik kehadiran Anda dan histori kegiatan yang diikuti.
 
 ### B. Untuk Admin / Operator

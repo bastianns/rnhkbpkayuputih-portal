@@ -1,25 +1,34 @@
 import { supabase } from '@/lib/supabase';
 
-export async function getMemberDashboardData(email: string) {
-  // 1. Coba dapatkan Profil Anggota Tetap (SSOT)
+export async function getMemberDashboardData(email: string, authId: string) {
+  // 1. Coba dapatkan Profil Anggota Tetap (SSOT) berdasarkan id_auth (paling akurat)
   let { data: member, error: memberErr } = await supabase
     .from('anggota')
     .select('*, wijk(nama_wijk)')
-    .eq('email', email)
-    .single();
+    .eq('id_auth', authId)
+    .maybeSingle();
 
-  // 2. Jika tidak ada di anggota tetap, cek di Karantina
-  if (memberErr || !member) {
+  // 2. Jika tidak ketemu berdasarkan id_auth, coba email (fallback)
+  if (!member) {
+    let { data: memberByEmail } = await supabase
+      .from('anggota')
+      .select('*, wijk(nama_wijk)')
+      .eq('email', email)
+      .maybeSingle();
+    member = memberByEmail;
+  }
+
+  // 3. Jika masih tidak ada di anggota tetap, cek di Karantina berdasarkan JSONB
+  if (!member) {
     const { data: qMember } = await supabase
       .from('quarantine_anggota')
       .select('*')
-      .filter('raw_data->>email', 'eq', email)
+      .contains('raw_data', { id_auth: authId })
       .maybeSingle();
 
     if (qMember) {
-      // Mapping data karantina agar struktur minimalnya sama dengan objek member
       member = {
-        id_anggota: null, // Belum ada ID tetap
+        id_anggota: null,
         nama_lengkap: qMember.raw_data.nama_lengkap,
         email: qMember.raw_data.email,
         is_verified: false,
@@ -27,11 +36,37 @@ export async function getMemberDashboardData(email: string) {
         wijk: { nama_wijk: 'Dalam Antrean Vetting' }
       };
     } else {
-      throw new Error("Identitas tidak ditemukan di sistem.");
+      // Final attempt: cari berdasarkan email dengan contains JSONB
+      const { data: qMemberByEmail } = await supabase
+        .from('quarantine_anggota')
+        .select('*')
+        .contains('raw_data', { email: email })
+        .maybeSingle();
+      
+      if (qMemberByEmail) {
+        member = {
+          id_anggota: null,
+          nama_lengkap: qMemberByEmail.raw_data.nama_lengkap,
+          email: qMemberByEmail.raw_data.email,
+          is_verified: false,
+          created_at: qMemberByEmail.created_at,
+          wijk: { nama_wijk: 'Dalam Antrean Vetting' }
+        };
+      } else {
+        // PROFIL PLACEHOLDER (Bypass Loop Redirect)
+        member = {
+          id_anggota: null,
+          nama_lengkap: 'Jemaat RNHKBP',
+          email: email,
+          is_verified: false,
+          created_at: new Date().toISOString(),
+          wijk: { nama_wijk: 'Profil Belum Terhubung' }
+        };
+      }
     }
   }
 
-  // 3. Dapatkan Riwayat Partisipasi (Hanya jika sudah jadi anggota tetap)
+  // 4. Dapatkan Riwayat Partisipasi (Hanya jika sudah jadi anggota tetap)
   const activities = member.id_anggota ? (await supabase
     .from('riwayat_partisipasi')
     .select(`*, katalog_peran (bobot_kontribusi)`)

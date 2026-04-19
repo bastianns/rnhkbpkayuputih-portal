@@ -16,24 +16,26 @@ export async function submitRegistrationForm(formData: any) {
   try {
     const emailFormatted = formData.email.toLowerCase().trim();
 
-    // 1. Identity Portaling: Buat akun Auth (Supabase GoTrue)
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // 1. Identity Portaling: Buat akun Auth & Kirim semua data profil ke Metadata
+    // Database Trigger (fn_handle_new_user_registration) akan mengambil data dari sini otomatis
+    const { error: authError } = await supabase.auth.signUp({
       email: emailFormatted, 
       password: formData.password, 
-      options: { data: { full_name: formData.nama_lengkap } }
+      options: { 
+        data: { 
+          nama_lengkap: formData.nama_lengkap,
+          tanggal_lahir: formData.tanggal_lahir,
+          id_wijk: formData.id_wijk,
+          no_telp: formData.no_telp,
+          alamat: formData.alamat,
+          id_kategori_kesibukan: formData.id_kategori_kesibukan,
+          keahlian: formData.keahlian,
+          consent_pdp: formData.consent_pdp
+        } 
+      }
     });
 
     if (authError) throw authError;
-
-    // 2. Data Isolation & Sanitization
-    // Membuang password dan consent_pdp dari payload yang akan disimpan ke DB
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, consent_pdp, ...rawData } = formData;
-    rawData.email = emailFormatted;
-    rawData.created_at = new Date().toISOString();
-
-    // 3. Panggil Model untuk memicu RPC Identity Vetting Engine (Fellegi-Sunter)
-    await insertQuarantineData(rawData, authData.user?.id);
 
     return { 
       success: true, 

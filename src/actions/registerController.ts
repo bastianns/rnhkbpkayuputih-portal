@@ -26,6 +26,7 @@ export async function submitRegistrationForm(rawInput: unknown) {
     // 1. Validasi Input via Zod (Type-Safety)
     const result = RegistrationSchema.safeParse(rawInput);
     if (!result.success) {
+      console.error("Zod Validation Error:", result.error.format());
       return { 
         success: false, 
         error: "Data yang Anda masukkan tidak valid. Silakan periksa kembali." 

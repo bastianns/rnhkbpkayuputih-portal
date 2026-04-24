@@ -21,9 +21,7 @@ export const RegistrationSchema = z.object({
   alamat: z.string().min(10, 'Alamat minimal 10 karakter'),
   id_kategori_kesibukan: z.string().uuid('Kategori kesibukan tidak valid'),
   keahlian: z.array(z.string().uuid()).min(1, 'Pilih minimal 1 keahlian'),
-  consent_pdp: z.literal(true, {
-    errorMap: () => ({ message: 'Anda harus menyetujui kebijakan privasi data' }),
-  }),
+  consent_pdp: z.boolean().refine(val => val === true, 'Anda harus menyetujui kebijakan privasi data'),
 });
 
 export type RegistrationFormData = z.infer<typeof RegistrationSchema>;

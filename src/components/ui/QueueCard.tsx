@@ -4,7 +4,7 @@ interface QueueCardProps {
   item: any;
   wijkName: string;
   loadingId: string | null;
-  onAction: (id: string, action: 'approve' | 'reject') => void;
+  onAction: (id: string, action: 'ACCEPT' | 'REJECT' | 'MERGE') => void;
   onSpring: (e: React.MouseEvent<HTMLElement>, state: 'down' | 'up') => void;
   prefixCls?: string;
 }
@@ -40,7 +40,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
         <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] text-center mb-1">Tindakan SSOT</p>
         
         <button
-          onClick={() => onAction(item.id_quarantine, 'approve')}
+          onClick={() => onAction(item.id_quarantine, 'ACCEPT')}
           disabled={!!loadingId}
           onMouseDown={(e) => onSpring(e as any, 'down')}
           onMouseUp={(e) => onSpring(e as any, 'up')}
@@ -50,7 +50,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
         </button>
 
         <button
-          onClick={() => onAction(item.id_quarantine, 'reject')}
+          onClick={() => onAction(item.id_quarantine, 'REJECT')}
           disabled={!!loadingId}
           onMouseDown={(e) => onSpring(e as any, 'down')}
           onMouseUp={(e) => onSpring(e as any, 'up')}

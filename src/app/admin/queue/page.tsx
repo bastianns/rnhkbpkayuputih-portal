@@ -59,8 +59,8 @@ export default function QueuePage() {
     animate(e.currentTarget, { scale: state === 'down' ? 0.95 : 1, duration: 400, ease: spring({ bounce: 0.4 }) });
   };
 
-  const handleAction = async (id: string, action: 'approve' | 'reject') => {
-    if (!confirm(`Apakah Anda yakin ingin melakukan ${action.toUpperCase()} pada data ini?`)) return;
+  const handleAction = async (id: string, action: 'ACCEPT' | 'REJECT' | 'MERGE') => {
+    if (!confirm(`Apakah Anda yakin ingin melakukan ${action} pada data ini?`)) return;
     
     setLoadingId(id);
     const targetItem = items.find(i => i.id_quarantine === id);
@@ -69,7 +69,7 @@ export default function QueuePage() {
     if (result.success) {
       const cardEl = document.getElementById(`queue-card-${id}`);
       if (cardEl) {
-        animate(cardEl, { scale: 0.8, x: action === 'approve' ? 100 : -100, opacity: 0, duration: 500, ease: 'inExpo' });
+        animate(cardEl, { scale: 0.8, x: action === 'ACCEPT' || action === 'MERGE' ? 100 : -100, opacity: 0, duration: 500, ease: 'inExpo' });
         await new Promise(r => setTimeout(r, 500));
       }
       setItems(prev => prev.filter(i => i.id_quarantine !== id));

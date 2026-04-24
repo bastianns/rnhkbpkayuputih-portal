@@ -202,11 +202,8 @@ function LoginContent() {
 
     if (result.success) {
       if (result.redirect) {
-        // Redirect Admin
+        // Redirect Admin / User
         router.push(result.redirect);
-      } else if (result.message) {
-        // Tampilkan pesan OTP sukses untuk Jemaat
-        setMessage(result.message);
       }
     } else {
       // Tampilkan pesan error

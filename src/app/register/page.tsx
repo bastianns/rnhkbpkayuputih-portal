@@ -114,9 +114,29 @@ export default function RegistrationPage() {
   };
 
   const handleNext = (nextStep: number) => {
-    if (currentStep === 1 && (!formData.nama_lengkap || !formData.email || !formData.password || !formData.id_wijk || !formData.tanggal_lahir)) {
-      setError("Mohon lengkapi data identitas utama termasuk Tanggal Lahir."); return;
+    if (currentStep === 1) {
+      const { nama_lengkap, email, password, id_wijk, tanggal_lahir, no_telp, alamat } = formData;
+      if (!nama_lengkap || !email || !password || !id_wijk || !tanggal_lahir || !no_telp || !alamat) {
+        setError("Mohon lengkapi semua data identitas utama (termasuk Alamat & WA)."); 
+        return;
+      }
+      if (alamat.length < 10) {
+        setError("Alamat domisili minimal harus 10 karakter.");
+        return;
+      }
     }
+
+    if (currentStep === 2) {
+      if (!formData.id_kategori_kesibukan) {
+        setError("Mohon pilih kategori kesibukan Anda.");
+        return;
+      }
+      if (formData.keahlian.length === 0) {
+        setError("Mohon pilih minimal 1 keahlian/talenta.");
+        return;
+      }
+    }
+
     setError(null);
     setCurrentStep(nextStep);
   };
@@ -205,6 +225,17 @@ export default function RegistrationPage() {
                 <InputBlock label="Secure Password" name="password" type="password" value={formData.password} onChange={handleInputChange} icon={<Lock size={14}/>} />
                 <InputBlock label="No. WhatsApp" name="no_telp" type="tel" value={formData.no_telp} onChange={handleInputChange} icon={<Phone size={14}/>} />
                 <InputBlock label="Tanggal Lahir" name="tanggal_lahir" type="date" value={formData.tanggal_lahir} onChange={handleInputChange} icon={<Calendar size={14}/>} />
+                
+                <div className="col-span-full space-y-2 anim-input">
+                  <label className="text-[9px] font-bold text-[#c5a059] uppercase tracking-widest">Alamat Domisili</label>
+                  <textarea 
+                    name="alamat" 
+                    value={formData.alamat} 
+                    onChange={handleInputChange} 
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-4 text-sm text-white focus:border-[#c5a059] outline-none transition-all min-h-[100px] resize-none" 
+                    placeholder="Alamat lengkap sesuai KTP / Domisili saat ini..."
+                  />
+                </div>
               </div>
             )}
 
@@ -238,9 +269,14 @@ export default function RegistrationPage() {
             {currentStep === 3 && (
               <div key="step3-content" className="space-y-6 anim-input">
                 <div className="bg-white/5 p-6 rounded-xl border border-white/10 space-y-3">
-                   <div className="flex justify-between text-[10px] uppercase tracking-widest"><span className="text-[#c5a059]">Nama:</span> <span className="text-white">{formData.nama_lengkap}</span></div>
-                   <div className="flex justify-between text-[10px] uppercase tracking-widest"><span className="text-[#c5a059]">Email:</span> <span className="text-white lowercase">{formData.email}</span></div>
-                   <div className="flex justify-between text-[10px] uppercase tracking-widest"><span className="text-[#c5a059]">Wijk:</span> <span className="text-white">{wijks.find(w => w.id_wijk === formData.id_wijk)?.nama_wijk}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">Nama:</span> <span className="text-white">{formData.nama_lengkap}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">Lahir:</span> <span className="text-white">{formData.tanggal_lahir}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">Email:</span> <span className="text-white lowercase">{formData.email}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">WhatsApp:</span> <span className="text-white">{formData.no_telp}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">Wijk:</span> <span className="text-white">{wijks.find(w => w.id_wijk === formData.id_wijk)?.nama_wijk}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest border-b border-white/5 pb-2"><span className="text-[#c5a059]">Kesibukan:</span> <span className="text-white">{occupations.find(o => o.id_kategori_kesibukan === formData.id_kategori_kesibukan)?.nama_kategori}</span></div>
+                   <div className="flex justify-between text-[9px] uppercase tracking-widest"><span className="text-[#c5a059]">Keahlian:</span> <span className="text-white">{formData.keahlian.length} Dipilih</span></div>
+                   <div className="pt-2 text-[9px] uppercase tracking-widest"><span className="text-[#c5a059]">Alamat:</span> <p className="text-white/60 mt-1 leading-relaxed normal-case font-medium">{formData.alamat}</p></div>
                 </div>
                 <label className="flex items-start gap-4 p-5 bg-[#c5a059]/5 border border-[#c5a059]/20 rounded-xl cursor-pointer group">
                   <input type="checkbox" checked={formData.consent_pdp} onChange={(e) => setFormData({...formData, consent_pdp: e.target.checked})} className="mt-1 w-4 h-4 accent-[#c5a059]" />

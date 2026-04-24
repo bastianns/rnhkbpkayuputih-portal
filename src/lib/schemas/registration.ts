@@ -18,7 +18,7 @@ export const RegistrationSchema = z.object({
     }, 'Tanggal lahir tidak valid atau umur di luar batas (5-120 tahun)'),
   id_wijk: z.string().uuid('Wijk tidak valid'),
   no_telp: z.string().regex(/^08\d{8,11}$/, 'Nomor HP harus berformat 08xxxxxxxxxx'),
-  alamat: z.string().min(10, 'Alamat minimal 10 karakter'),
+  alamat: z.string().min(5, 'Alamat minimal 5 karakter'),
   id_kategori_kesibukan: z.string().uuid('Kategori kesibukan tidak valid'),
   keahlian: z.array(z.string().uuid()).min(1, 'Pilih minimal 1 keahlian'),
   consent_pdp: z.boolean().refine(val => val === true, 'Anda harus menyetujui kebijakan privasi data'),

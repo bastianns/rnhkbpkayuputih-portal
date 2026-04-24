@@ -1,6 +1,10 @@
-import { supabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-export async function getReferenceData() {
+/**
+ * Mengambil data referensi master untuk keperluan dropdown pendaftaran.
+ * @param supabase Instance Supabase Client (Server/Browser)
+ */
+export async function getReferenceData(supabase: SupabaseClient) {
   const [wRes, sRes, oRes] = await Promise.all([
     supabase.from('wijk').select('*').order('nama_wijk'),
     supabase.from('ref_keahlian').select('*').order('nama_keahlian'),
@@ -12,19 +16,4 @@ export async function getReferenceData() {
     skills: sRes.data || [],
     occupations: oRes.data || []
   };
-}
-
-export async function insertQuarantineData(rawData: any, authId: string | undefined) {
-  // ✅ MEMANGGIL FELLEGI-SUNTER ENGINE VIA RPC
-  // Payload otomatis di-cast menjadi JSONB oleh Supabase
-  const { data, error } = await supabase.rpc('fn_portal_register_anggota', {
-    p_raw_data: { ...rawData, id_auth: authId }
-  });
-  
-  if (error) {
-    console.error('Database Error (Fellegi-Sunter Engine):', error.message);
-    throw error;
-  }
-
-  return data; // Mengembalikan UUID dari record karantina
 }

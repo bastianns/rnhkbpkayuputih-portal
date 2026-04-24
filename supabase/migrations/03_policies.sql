@@ -35,6 +35,12 @@ CREATE POLICY anggota_mgr_write ON public.anggota
 
 -- 4. KEBIJAKAN KARANTINA & DEDUP (KHUSUS ADMIN)
 -- Data di karantina bersifat sensitif karena berisi potensi duplikat
+-- Drop policy anonim yang mungkin tertinggal di server
+DROP POLICY IF EXISTS "Allow anon read quarantine" ON public.quarantine_anggota;
+DROP POLICY IF EXISTS "Allow anyone to register" ON public.quarantine_anggota;
+DROP POLICY IF EXISTS "Enable insert for registration" ON public.quarantine_anggota;
+DROP POLICY IF EXISTS "Allow anon read candidate" ON public.dedup_candidate;
+
 DROP POLICY IF EXISTS quarantine_mgr ON public.quarantine_anggota;
 CREATE POLICY quarantine_mgr ON public.quarantine_anggota 
     FOR ALL TO authenticated 

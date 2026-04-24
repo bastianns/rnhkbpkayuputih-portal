@@ -2,47 +2,79 @@
 
 import { createClient } from '@/lib/supabaseServer';
 import { getReferenceData } from '@/lib/models/registerModel';
+import { RegistrationSchema } from '@/lib/schemas/registration';
 
+/**
+ * Memuat data referensi (Wijk, Keahlian, Kesibukan) untuk form pendaftaran.
+ */
 export async function fetchRegistrationOptions() {
   try {
-    return await getReferenceData();
+    const supabase = await createClient();
+    return await getReferenceData(supabase);
   } catch (error) {
     console.error("Gagal memuat opsi registrasi:", error);
     return { wijks: [], skills: [], occupations: [] };
   }
 }
 
-export async function submitRegistrationForm(formData: any) {
+/**
+ * Memproses pendaftaran jemaat baru.
+ * Menggunakan arsitektur Atomic Trigger (Next.js -> Supabase Auth -> DB Trigger).
+ */
+export async function submitRegistrationForm(rawInput: unknown) {
   try {
-    const supabase = await createClient();
-    const emailFormatted = formData.email.toLowerCase().trim();
+    // 1. Validasi Input via Zod (Type-Safety)
+    const result = RegistrationSchema.safeParse(rawInput);
+    if (!result.success) {
+      return { 
+        success: false, 
+        error: "Data yang Anda masukkan tidak valid. Silakan periksa kembali." 
+      };
+    }
 
-    // 1. Identity Portaling: Buat akun Auth & Kirim semua data profil ke Metadata
+    const { email, password, ...profileData } = result.data;
+    const supabase = await createClient();
+
+    // 2. Eksekusi Atomic Registration
+    // Trigger database 'tr_on_new_user_registered' akan otomatis memproses profileData
+    // yang dikirimkan melalui metadata. Jika profil gagal masuk karantina,
+    // maka pembuatan akun Auth ini akan otomatis di-ROLLBACK oleh PostgreSQL.
     const { error: authError } = await supabase.auth.signUp({
-      email: emailFormatted, 
-      password: formData.password, 
-      options: { 
-        data: { 
-          nama_lengkap: formData.nama_lengkap,
-          tanggal_lahir: formData.tanggal_lahir,
-          id_wijk: formData.id_wijk,
-          no_telp: formData.no_telp,
-          alamat: formData.alamat,
-          id_kategori_kesibukan: formData.id_kategori_kesibukan,
-          keahlian: formData.keahlian,
-          consent_pdp: formData.consent_pdp
-        } 
+      email: email.toLowerCase().trim(),
+      password: password,
+      options: {
+        data: {
+          ...profileData,
+          // Tambahkan flag untuk identifikasi di log jika perlu
+          registration_source: 'portal_mvp_v1'
+        }
       }
     });
 
-    if (authError) throw authError;
+    if (authError) {
+      // Normalisasi error: Bedakan antara error validasi bisnis (dari trigger) 
+      // dan error teknis sistem.
+      const isBusinessRule = authError.message.includes('Registrasi') || 
+                             authError.message.includes('consent');
+      
+      return { 
+        success: false, 
+        error: isBusinessRule 
+          ? authError.message 
+          : 'Terjadi kesalahan sistem saat membuat akun. Silakan coba lagi nanti.' 
+      };
+    }
 
     return { 
       success: true, 
-      message: 'Pendaftaran berhasil. Data Anda telah masuk ke antrean vetting untuk diverifikasi oleh admin.' 
+      message: 'Pendaftaran berhasil. Data Anda telah masuk ke antrean verifikasi admin.' 
     };
+
   } catch (error: any) {
-    console.error("Registration Error:", error.message);
-    return { success: false, error: error.message || 'Terjadi kesalahan saat pendaftaran.' };
+    console.error("Critical Registration Error:", error.message);
+    return { 
+      success: false, 
+      error: error.message || 'Terjadi kesalahan sistem saat memproses pendaftaran.' 
+    };
   }
 }

@@ -31,32 +31,42 @@ DECLARE
     wa_nama NUMERIC; wd_nama NUMERIC; wa_tgl NUMERIC; wd_tgl NUMERIC; wa_wijk NUMERIC; wd_wijk NUMERIC;
     v_year_birth INT := EXTRACT(YEAR FROM p_tgl_lahir);
 BEGIN
-    -- Ambil parameter bobot logaritma dari tabel dedup_parameter
-    SELECT weight_agreement, weight_disagreement INTO wa_nama, wd_nama FROM public.dedup_parameter WHERE field_name='nama_lengkap';
-    SELECT weight_agreement, weight_disagreement INTO wa_tgl, wd_tgl FROM public.dedup_parameter WHERE field_name='tanggal_lahir';
-    SELECT weight_agreement, weight_disagreement INTO wa_wijk, wd_wijk FROM public.dedup_parameter WHERE field_name='id_wijk';
+    -- Optimasi: Ambil semua bobot dalam satu kueri tunggal
+    SELECT 
+        MAX(CASE WHEN field_name='nama_lengkap' THEN weight_agreement END),
+        MAX(CASE WHEN field_name='nama_lengkap' THEN weight_disagreement END),
+        MAX(CASE WHEN field_name='tanggal_lahir' THEN weight_agreement END),
+        MAX(CASE WHEN field_name='tanggal_lahir' THEN weight_disagreement END),
+        MAX(CASE WHEN field_name='id_wijk' THEN weight_agreement END),
+        MAX(CASE WHEN field_name='id_wijk' THEN weight_disagreement END)
+    INTO wa_nama, wd_nama, wa_tgl, wd_tgl, wa_wijk, wd_wijk
+    FROM public.dedup_parameter
+    WHERE field_name IN ('nama_lengkap', 'tanggal_lahir', 'id_wijk');
 
     RETURN QUERY
     WITH candidates AS (
-        -- Pencarian kandidat berdasarkan nama mirip atau tahun lahir yang sama
-        SELECT a.id_anggota, similarity(a.nama_lengkap, p_nama) AS sim_nama, a.tanggal_lahir, a.id_wijk
-        FROM public.anggota a
-        WHERE a.id_wijk = p_id_wijk 
-           OR EXTRACT(YEAR FROM a.tanggal_lahir) = v_year_birth 
-           OR similarity(a.nama_lengkap, p_nama) > 0.4
+        -- Optimasi: Gunakan UNION agar PostgreSQL bisa memakai INDEX per-branch
+        SELECT a.id_anggota FROM public.anggota a WHERE a.id_wijk = p_id_wijk
+        UNION
+        SELECT a.id_anggota FROM public.anggota a WHERE EXTRACT(YEAR FROM a.tanggal_lahir) = v_year_birth
+        UNION
+        SELECT a.id_anggota FROM public.anggota a WHERE a.nama_lengkap % p_nama -- operator trigram similarity
     ),
     scored AS (
-        -- Perhitungan skor akumulatif
-        SELECT id_anggota,
-            ((CASE WHEN sim_nama >= 0.85 THEN wa_nama ELSE wd_nama END) +
-             (CASE WHEN tanggal_lahir = p_tgl_lahir THEN wa_tgl ELSE wd_tgl END) +
-             (CASE WHEN id_wijk = p_id_wijk THEN wa_wijk ELSE wd_wijk END))::numeric AS score
-        FROM candidates
+        -- Perhitungan skor akumulatif pada kandidat terfilter
+        SELECT 
+            a.id_anggota,
+            similarity(a.nama_lengkap, p_nama) as sim_nama,
+            ((CASE WHEN similarity(a.nama_lengkap, p_nama) >= 0.85 THEN wa_nama ELSE wd_nama END) +
+             (CASE WHEN a.tanggal_lahir = p_tgl_lahir THEN wa_tgl ELSE wd_tgl END) +
+             (CASE WHEN a.id_wijk = p_id_wijk THEN wa_wijk ELSE wd_wijk END))::numeric AS score
+        FROM candidates c
+        JOIN public.anggota a ON a.id_anggota = c.id_anggota
     )
     SELECT id_anggota, score,
         CASE 
-             WHEN score >= (wa_nama + wa_tgl) THEN 'match'    -- Identitas sangat mirip
-             WHEN score >= (wa_nama + wd_tgl) THEN 'possible' -- Perlu peninjauan
+             WHEN score >= (wa_nama + wa_tgl) THEN 'match'    
+             WHEN score >= (wa_nama + wd_tgl) THEN 'possible' 
              ELSE 'non-match' 
         END
     FROM scored ORDER BY score DESC LIMIT 1;
@@ -73,14 +83,18 @@ DECLARE
     v_target_id UUID;
     v_fs_score NUMERIC;
     v_match_status TEXT;
+    v_id_auth UUID := (p_raw_data->>'id_auth')::UUID;
 BEGIN
-    -- 1. Masukkan data mentah ke tabel karantina (Data Isolation)
-    INSERT INTO public.quarantine_anggota (raw_data, status)
-    VALUES (p_raw_data, 'pending')
+    -- 1. Pencegahan Race Condition: Advisory Lock dua argumen (Nama & Wijk)
+    -- Menggunakan dua argumen INT4 untuk meminimalisir hash collision dibandingkan satu argumen
+    PERFORM pg_advisory_xact_lock(hashtext(p_raw_data->>'nama_lengkap'), hashtext(p_raw_data->>'id_wijk'));
+
+    -- 2. Masukkan data mentah ke tabel karantina (Data Isolation)
+    INSERT INTO public.quarantine_anggota (raw_data, status, id_auth)
+    VALUES (p_raw_data, 'pending', v_id_auth)
     RETURNING id_quarantine INTO v_quarantine_id;
 
-    -- 2. Jalankan Identity Vetting Engine (Fellegi-Sunter Precheck)
-    -- Ekstraksi data dilakukan secara dinamis dari JSONB
+    -- 3. Jalankan Identity Vetting Engine (Fellegi-Sunter Precheck terhadap Master Data)
     SELECT target_id, fs_score, match_status INTO v_target_id, v_fs_score, v_match_status
     FROM public.fn_portal_dedup_precheck(
         p_raw_data->>'nama_lengkap',
@@ -88,20 +102,34 @@ BEGIN
         (p_raw_data->>'id_wijk')::UUID
     );
 
-    -- 3. Branching Logic: Jika terdeteksi kemiripan, buat kandidat duplikat
+    -- 4. Cross-Quarantine Check: Cek duplikasi dengan data lain yang masih 'pending'
+    -- Gunakan casting ::UUID untuk keamanan tipe data JSONB
+    INSERT INTO public.dedup_candidate (id_quarantine_a, id_quarantine_b, score, decision)
+    SELECT 
+        q.id_quarantine, 
+        v_quarantine_id, 
+        similarity(q.raw_data->>'nama_lengkap', p_raw_data->>'nama_lengkap'),
+        'possible'
+    FROM public.quarantine_anggota q
+    WHERE q.id_quarantine != v_quarantine_id
+      AND q.status = 'pending'
+      AND (q.raw_data->>'id_wijk')::UUID = (p_raw_data->>'id_wijk')::UUID
+      AND similarity(q.raw_data->>'nama_lengkap', p_raw_data->>'nama_lengkap') > 0.4;
+
+    -- 5. Flag jika ada kemiripan dengan Master Data
     IF v_match_status IN ('match', 'possible') THEN
         INSERT INTO public.dedup_candidate (id_anggota_a, id_quarantine_b, score, decision)
         VALUES (v_target_id, v_quarantine_id, v_fs_score, 'possible');
         
-        -- Perkaya metadata karantina untuk Admin Dashboard
         UPDATE public.quarantine_anggota 
         SET error_details = format('Fellegi-Sunter: %s (Skor: %s)', v_match_status, v_fs_score)
         WHERE id_quarantine = v_quarantine_id;
     END IF;
 
-    -- 4. Pencatatan Audit Log (Integritas Sistem)
+    -- 6. Pencatatan Audit Log
+    -- Menggunakan v_id_auth karena trigger ini berjalan di luar session user biasa
     INSERT INTO public.audit_log (actor_id, action, entity, entity_id, new_data)
-    VALUES (auth.uid(), 'VETTING_REGISTER', 'quarantine_anggota', v_quarantine_id, p_raw_data);
+    VALUES (v_id_auth, 'VETTING_REGISTER', 'quarantine_anggota', v_quarantine_id, p_raw_data);
 
     RETURN v_quarantine_id;
 END;

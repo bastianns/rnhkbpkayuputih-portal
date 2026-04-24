@@ -33,7 +33,9 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
     id_kategori_kesibukan: '', keahlian: [] as string[], consent_pdp: false
   });
 
-  const handleInputChange = (e: any) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
   
   const handleKeahlianChange = (id: string) => {
     setFormData(prev => ({
@@ -67,7 +69,7 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
       if (result.success) {
         setSubmitted(true);
       } else {
-        throw new Error(result.error);
+        setError(result.error as string);
       }
     } catch (err: any) {
       setError(err.message || "Gagal mengirim data pendaftaran.");

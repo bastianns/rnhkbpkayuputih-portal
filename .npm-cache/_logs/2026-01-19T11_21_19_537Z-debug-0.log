@@ -1,0 +1,243 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.8.2
+2 info using node@v20.18.1
+3 silly config load:file:C:\Users\basti\AppData\Roaming\nvm\v20.18.1\node_modules\npm\npmrc
+4 silly config load:file:D:\rnhkbp-portal-mvp\.npmrc
+5 silly config load:file:C:\Users\basti\.npmrc
+6 silly config load:file:C:\Users\basti\npm-global\etc\npmrc
+7 verbose title npm install typescript @types/node @types/react @types/react-dom
+8 verbose argv "install" "--save-dev" "typescript" "@types/node" "@types/react" "@types/react-dom" "--cache" "./.npm-cache"
+9 verbose logfile logs-max:10 dir:D:\rnhkbp-portal-mvp\.npm-cache\_logs\2026-01-19T11_21_19_537Z-
+10 verbose logfile D:\rnhkbp-portal-mvp\.npm-cache\_logs\2026-01-19T11_21_19_537Z-debug-0.log
+11 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+12 silly logfile done cleaning log files
+13 silly idealTree buildDeps
+14 silly fetch manifest typescript@*
+15 silly packumentCache full:https://registry.npmjs.org/typescript cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/typescript 480ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/typescript set size:undefined disposed:false
+18 silly fetch manifest @types/node@*
+19 silly packumentCache full:https://registry.npmjs.org/@types%2fnode cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/@types%2fnode 26ms (cache hit)
+21 silly packumentCache full:https://registry.npmjs.org/@types%2fnode set size:10797446 disposed:false
+22 silly fetch manifest @types/react@*
+23 silly packumentCache full:https://registry.npmjs.org/@types%2freact cache-miss
+24 http fetch GET 200 https://registry.npmjs.org/@types%2freact 102ms (cache miss)
+25 silly packumentCache full:https://registry.npmjs.org/@types%2freact set size:undefined disposed:false
+26 silly fetch manifest @types/react-dom@*
+27 silly packumentCache full:https://registry.npmjs.org/@types%2freact-dom cache-miss
+28 http fetch GET 200 https://registry.npmjs.org/@types%2freact-dom 281ms (cache miss)
+29 silly packumentCache full:https://registry.npmjs.org/@types%2freact-dom set size:undefined disposed:false
+30 silly placeDep ROOT @types/node@25.0.9 REPLACE for: rnhkbp-portal-mvp@1.0.0 want: *
+31 silly placeDep ROOT @types/react@19.2.8 OK for: rnhkbp-portal-mvp@1.0.0 want: *
+32 silly placeDep ROOT @types/react-dom@19.2.3 OK for: rnhkbp-portal-mvp@1.0.0 want: *
+33 silly placeDep ROOT typescript@5.9.3 OK for: rnhkbp-portal-mvp@1.0.0 want: *
+34 silly fetch manifest csstype@^3.2.2
+35 silly packumentCache full:https://registry.npmjs.org/csstype cache-miss
+36 http fetch GET 200 https://registry.npmjs.org/csstype 60ms (cache miss)
+37 silly packumentCache full:https://registry.npmjs.org/csstype set size:undefined disposed:false
+38 silly placeDep ROOT csstype@3.2.3 OK for: @types/react@19.2.8 want: ^3.2.2
+39 silly reify moves {}
+40 silly audit bulk request {
+40 silly audit   '@emnapi/runtime': [ '1.8.1' ],
+40 silly audit   '@img/colour': [ '1.0.0' ],
+40 silly audit   '@img/sharp-darwin-arm64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-darwin-x64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-libvips-darwin-arm64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-darwin-x64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-arm': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-arm64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-ppc64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-riscv64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-s390x': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linux-x64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linuxmusl-arm64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-libvips-linuxmusl-x64': [ '1.2.4' ],
+40 silly audit   '@img/sharp-linux-arm': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linux-arm64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linux-ppc64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linux-riscv64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linux-s390x': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linux-x64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linuxmusl-arm64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-linuxmusl-x64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-wasm32': [ '0.34.5' ],
+40 silly audit   '@img/sharp-win32-arm64': [ '0.34.5' ],
+40 silly audit   '@img/sharp-win32-ia32': [ '0.34.5' ],
+40 silly audit   '@img/sharp-win32-x64': [ '0.34.5' ],
+40 silly audit   '@next/env': [ '16.1.3' ],
+40 silly audit   '@next/swc-darwin-arm64': [ '16.1.3' ],
+40 silly audit   '@next/swc-darwin-x64': [ '16.1.3' ],
+40 silly audit   '@next/swc-linux-arm64-gnu': [ '16.1.3' ],
+40 silly audit   '@next/swc-linux-arm64-musl': [ '16.1.3' ],
+40 silly audit   '@next/swc-linux-x64-gnu': [ '16.1.3' ],
+40 silly audit   '@next/swc-linux-x64-musl': [ '16.1.3' ],
+40 silly audit   '@next/swc-win32-arm64-msvc': [ '16.1.3' ],
+40 silly audit   '@next/swc-win32-x64-msvc': [ '16.1.3' ],
+40 silly audit   '@supabase/auth-js': [ '2.90.1' ],
+40 silly audit   '@supabase/functions-js': [ '2.90.1' ],
+40 silly audit   '@supabase/postgrest-js': [ '2.90.1' ],
+40 silly audit   '@supabase/realtime-js': [ '2.90.1' ],
+40 silly audit   '@supabase/storage-js': [ '2.90.1' ],
+40 silly audit   '@supabase/supabase-js': [ '2.90.1' ],
+40 silly audit   '@swc/helpers': [ '0.5.15' ],
+40 silly audit   '@types/phoenix': [ '1.6.7' ],
+40 silly audit   '@types/ws': [ '8.18.1' ],
+40 silly audit   'baseline-browser-mapping': [ '2.9.15' ],
+40 silly audit   'caniuse-lite': [ '1.0.30001765' ],
+40 silly audit   'client-only': [ '0.0.1' ],
+40 silly audit   'detect-libc': [ '2.1.2' ],
+40 silly audit   'iceberg-js': [ '0.8.1' ],
+40 silly audit   nanoid: [ '3.3.11' ],
+40 silly audit   next: [ '16.1.3' ],
+40 silly audit   picocolors: [ '1.1.1' ],
+40 silly audit   postcss: [ '8.4.31' ],
+40 silly audit   react: [ '19.2.3' ],
+40 silly audit   'react-dom': [ '19.2.3' ],
+40 silly audit   scheduler: [ '0.27.0' ],
+40 silly audit   semver: [ '7.7.3' ],
+40 silly audit   sharp: [ '0.34.5' ],
+40 silly audit   'source-map-js': [ '1.2.1' ],
+40 silly audit   'styled-jsx': [ '5.1.6' ],
+40 silly audit   tslib: [ '2.8.1' ],
+40 silly audit   'undici-types': [ '7.16.0' ],
+40 silly audit   ws: [ '8.19.0' ],
+40 silly audit   '@types/node': [ '25.0.9' ],
+40 silly audit   '@types/react': [ '19.2.8' ],
+40 silly audit   '@types/react-dom': [ '19.2.3' ],
+40 silly audit   typescript: [ '5.9.3' ],
+40 silly audit   csstype: [ '3.2.3' ]
+40 silly audit }
+41 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-win32-arm64-msvc
+42 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-win32-arm64-msvc' ]
+43 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-linux-x64-musl
+44 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-linux-x64-musl' ]
+45 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-linux-x64-gnu
+46 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-linux-x64-gnu' ]
+47 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-linux-arm64-musl
+48 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-linux-arm64-musl' ]
+49 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-linux-arm64-gnu
+50 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-linux-arm64-gnu' ]
+51 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-darwin-x64
+52 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-darwin-x64' ]
+53 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@next\swc-darwin-arm64
+54 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@next\\swc-darwin-arm64' ]
+55 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-win32-ia32
+56 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-win32-ia32' ]
+57 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-win32-arm64
+58 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-win32-arm64' ]
+59 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-wasm32
+60 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-wasm32' ]
+61 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@emnapi\runtime
+62 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@emnapi\\runtime' ]
+63 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linuxmusl-x64
+64 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linuxmusl-x64' ]
+65 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linuxmusl-arm64
+66 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linuxmusl-arm64' ]
+67 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-x64
+68 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-x64' ]
+69 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-s390x
+70 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-s390x' ]
+71 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-riscv64
+72 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-riscv64' ]
+73 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-ppc64
+74 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-ppc64' ]
+75 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-arm64
+76 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-arm64' ]
+77 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-linux-arm
+78 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-linux-arm' ]
+79 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linuxmusl-x64
+80 silly reify mark deleted [
+80 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linuxmusl-x64'
+80 silly reify ]
+81 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linuxmusl-arm64
+82 silly reify mark deleted [
+82 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linuxmusl-arm64'
+82 silly reify ]
+83 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-x64
+84 silly reify mark deleted [
+84 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-x64'
+84 silly reify ]
+85 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-s390x
+86 silly reify mark deleted [
+86 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-s390x'
+86 silly reify ]
+87 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-riscv64
+88 silly reify mark deleted [
+88 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-riscv64'
+88 silly reify ]
+89 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-ppc64
+90 silly reify mark deleted [
+90 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-ppc64'
+90 silly reify ]
+91 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-arm64
+92 silly reify mark deleted [
+92 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-arm64'
+92 silly reify ]
+93 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-linux-arm
+94 silly reify mark deleted [
+94 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-linux-arm'
+94 silly reify ]
+95 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-darwin-x64
+96 silly reify mark deleted [
+96 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-darwin-x64'
+96 silly reify ]
+97 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-libvips-darwin-arm64
+98 silly reify mark deleted [
+98 silly reify   'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-libvips-darwin-arm64'
+98 silly reify ]
+99 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-darwin-x64
+100 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-darwin-x64' ]
+101 verbose reify failed optional dependency D:\rnhkbp-portal-mvp\node_modules\@img\sharp-darwin-arm64
+102 silly reify mark deleted [ 'D:\\rnhkbp-portal-mvp\\node_modules\\@img\\sharp-darwin-arm64' ]
+103 silly tarball no local data for @types/react@https://registry.npmjs.org/@types/react/-/react-19.2.8.tgz. Extracting by manifest.
+104 silly tarball no local data for csstype@https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz. Extracting by manifest.
+105 silly tarball no local data for @types/react-dom@https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz. Extracting by manifest.
+106 silly tarball no local data for typescript@https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz. Extracting by manifest.
+107 http fetch GET 200 https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz 187ms (cache miss)
+108 http fetch GET 200 https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz 207ms (cache miss)
+109 http fetch GET 200 https://registry.npmjs.org/@types/react/-/react-19.2.8.tgz 220ms (cache miss)
+110 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 254ms
+111 silly audit report {}
+112 http fetch GET 200 https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz 1168ms (cache miss)
+113 silly ADD node_modules/csstype
+114 silly ADD node_modules/typescript
+115 silly ADD node_modules/@types/react-dom
+116 silly ADD node_modules/@types/react
+117 silly ADD
+118 silly ADD
+119 silly ADD
+120 silly ADD
+121 silly ADD
+122 silly ADD
+123 silly ADD
+124 silly ADD
+125 silly ADD
+126 silly ADD
+127 silly ADD
+128 silly ADD
+129 silly ADD
+130 silly ADD
+131 silly ADD
+132 silly ADD
+133 silly ADD
+134 silly ADD
+135 silly ADD
+136 silly ADD
+137 silly ADD
+138 silly ADD
+139 silly ADD
+140 silly ADD
+141 silly ADD
+142 silly ADD
+143 silly ADD
+144 silly ADD
+145 silly ADD
+146 silly ADD
+147 silly ADD
+148 verbose cwd D:\rnhkbp-portal-mvp
+149 verbose os Windows_NT 10.0.26100
+150 verbose node v20.18.1
+151 verbose npm  v10.8.2
+152 verbose exit 0
+153 info ok

@@ -53,7 +53,13 @@ export function RegistrationStep1({ formData, wijks, onChange, onNext, prefixCls
 
       <div className="space-y-2 pt-2">
         <label className={`text-[10px] font-bold text-[#c5a059] uppercase tracking-[0.2em] ${prefixCls}-label`}>Alamat Domisili</label>
-        <textarea name="alamat" value={formData.alamat} onChange={onChange} className="w-full bg-[#0a192f]/30 border border-[#c5a059]/30 rounded-md px-4 py-4 text-sm text-white focus:outline-none focus:border-[#c5a059] focus:bg-[#0a192f]/60 transition-colors min-h-[100px] resize-none" placeholder="Alamat lengkap saat ini..."/>
+        <textarea 
+          name="alamat" 
+          value={formData.alamat} 
+          onChange={onChange} 
+          className="w-full bg-[#0a192f]/30 border border-[#c5a059]/30 rounded-md px-4 py-4 text-sm text-white focus:outline-none focus:border-[#c5a059] focus:bg-[#0a192f]/60 transition-colors min-h-[100px] resize-none" 
+          placeholder="Alamat lengkap sesuai KTP / Domisili saat ini..."
+        />
       </div>
 
       <button onClick={onNext} className="w-full relative group overflow-hidden border border-[#c5a059] rounded-md py-4 mt-6 transition-all duration-300 hover:bg-[#c5a059]/10 hover:shadow-[0_0_20px_rgba(197,160,89,0.2)]">

@@ -55,7 +55,27 @@ export async function submitRegistrationForm(rawInput: unknown) {
     });
 
     if (authError) {
-      // Tampilkan pesan error asli agar transparan apa yang salah di sisi database/auth
+      // 3. Penanganan Idempotensi: Jika user sudah terdaftar di Auth
+      if (authError.message.includes('already registered')) {
+        const { data: existingInQueue } = await supabase
+          .from('quarantine_anggota')
+          .select('id_quarantine')
+          .eq('raw_data->>email', email.toLowerCase().trim())
+          .maybeSingle();
+
+        if (existingInQueue) {
+          return { 
+            success: true, 
+            message: 'Data pendaftaran Anda sudah tercatat sebelumnya dan sedang menunggu verifikasi admin.' 
+          };
+        }
+        
+        return { 
+          success: false, 
+          error: 'Email ini sudah terdaftar. Silakan gunakan menu Login.' 
+        };
+      }
+
       return { 
         success: false, 
         error: authError.message

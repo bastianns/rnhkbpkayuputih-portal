@@ -55,16 +55,10 @@ export async function submitRegistrationForm(rawInput: unknown) {
     });
 
     if (authError) {
-      // Normalisasi error: Bedakan antara error validasi bisnis (dari trigger) 
-      // dan error teknis sistem.
-      const isBusinessRule = authError.message.includes('Registrasi') || 
-                             authError.message.includes('consent');
-      
+      // Tampilkan pesan error asli agar transparan apa yang salah di sisi database/auth
       return { 
         success: false, 
-        error: isBusinessRule 
-          ? authError.message 
-          : 'Terjadi kesalahan sistem saat membuat akun. Silakan coba lagi nanti.' 
+        error: authError.message
       };
     }
 

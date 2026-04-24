@@ -28,7 +28,7 @@ export async function submitRegistrationForm(rawInput: unknown) {
     if (!result.success) {
       console.error("Zod Validation Error:", result.error.format());
       // Ambil pesan error pertama dari Zod untuk ditampilkan di UI
-      const firstError = result.error.errors[0]?.message || "Data tidak valid.";
+      const firstError = result.error.issues[0]?.message || "Data tidak valid.";
       return { 
         success: false, 
         error: firstError 

@@ -59,12 +59,11 @@ export default function QueuePage() {
     animate(e.currentTarget, { scale: state === 'down' ? 0.95 : 1, duration: 400, ease: spring({ bounce: 0.4 }) });
   };
 
-  const handleAction = async (id: string, action: 'ACCEPT' | 'REJECT' | 'MERGE') => {
+  const handleAction = async (id: string, action: 'ACCEPT' | 'REJECT' | 'MERGE', candidateId?: string) => {
     if (!confirm(`Apakah Anda yakin ingin melakukan ${action} pada data ini?`)) return;
     
     setLoadingId(id);
-    const targetItem = items.find(i => i.id_quarantine === id);
-    const result = await resolveQuarantineAction(id, action, targetItem);
+    const result = await resolveQuarantineAction(id, action, candidateId);
 
     if (result.success) {
       const cardEl = document.getElementById(`queue-card-${id}`);

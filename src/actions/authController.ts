@@ -2,23 +2,31 @@
 
 import { createClient } from '@/lib/supabaseServer';
 
+/**
+ * Memproses permintaan login jemaat dan admin secara aman.
+ * Menggunakan metadata role dari JWT untuk menentukan hak akses admin.
+ */
 export async function processLoginRequest(email: string, password?: string, redirectPath: string = '/dashboard') {
   try {
     const supabase = await createClient();
     const formattedEmail = email.toLowerCase().trim();
 
     if (!password) {
-      return { success: false, error: "Password wajib diisi untuk masuk ke sistem." };
+      return { success: false, error: "Password wajib diisi." };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ 
+    // 1. Melakukan autentikasi kredensial
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
       email: formattedEmail, 
       password 
     });
 
-    if (error) throw error;
+    if (authError) throw authError;
 
-    const isSystemAdmin = formattedEmail.endsWith('@rnhkbp.com');
+    // 2. KEAMANAN: Verifikasi Role Admin dari App Metadata (bukan cek domain email)
+    // Supabase menyimpan role di app_metadata setelah kita set di SQL/Dashboard
+    const isSystemAdmin = authData.user?.app_metadata?.role === 'admin';
+
     return { 
       success: true, 
       redirect: isSystemAdmin ? '/admin' : redirectPath 

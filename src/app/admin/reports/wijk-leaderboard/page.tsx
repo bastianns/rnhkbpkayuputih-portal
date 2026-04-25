@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { fetchComprehensiveLeaderboard } from '@/actions/leaderboardController';
-import { generateLeaderboardExcelData } from '@/actions/exportController';
 import { BrainCircuit, Activity, FileSpreadsheet, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -77,24 +76,36 @@ export default function GlobalWijkLeaderboard() {
     return () => clearTimeout(timer);
   }, [loading, data]);
 
+  // ── PENGGUNAAN DATA LOKAL UNTUK EXPORT (Fix Efisiensi) ──
   const handleExportExcel = async () => {
+    if (!data || data.length === 0) {
+      alert("Tidak ada data untuk diekspor.");
+      return;
+    }
+    
     setExporting(true);
     try {
-      const result = await generateLeaderboardExcelData();
-      if (result.success && result.data) {
-        const worksheet = XLSX.utils.json_to_sheet(result.data);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Wijk Leaderboard");
-        
-        // Auto-size columns
-        const maxWidth = result.data.reduce((w, r) => Math.max(w, r["Nama Wilayah (Wijk)"].length), 15);
-        worksheet["!cols"] = [{ wch: 10 }, { wch: maxWidth + 5 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 20 }];
+      // Format data untuk Excel agar rapi (Client-side formatting)
+      const formattedData = data.map((item: any, index: number) => ({
+        "Peringkat": index + 1,
+        "Nama Wilayah (Wijk)": item.nama_wijk || '-',
+        "Total Poin Wilayah": item.total_poin_wilayah,
+        "Indeks Keaktifan": item.indeks_keaktifan,
+        "Jumlah Anggota": item.jumlah_anggota,
+        "Status Wilayah": item.indeks_keaktifan >= 0.7 ? "Sangat Aktif" : (item.indeks_keaktifan >= 0.4 ? "Aktif" : "Perlu Perhatian")
+      }));
 
-        XLSX.writeFile(workbook, `RNHKBP_Leaderboard_Wijk_${new Date().toISOString().split('T')[0]}.xlsx`);
-      } else {
-        alert("Gagal mengambil data ekspor.");
-      }
+      const worksheet = XLSX.utils.json_to_sheet(formattedData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Wijk Leaderboard");
+      
+      // Auto-size columns dengan Guard (Fix Bug Crash)
+      const maxWidth = formattedData.reduce((w, r) => Math.max(w, String(r["Nama Wilayah (Wijk)"] || "").length), 15);
+      worksheet["!cols"] = [{ wch: 10 }, { wch: maxWidth + 5 }, { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
+
+      XLSX.writeFile(workbook, `RNHKBP_Leaderboard_Wijk_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (err) {
+      console.error(err);
       alert("Terjadi kesalahan saat mengunduh Excel.");
     } finally {
       setExporting(false);
@@ -128,7 +139,7 @@ export default function GlobalWijkLeaderboard() {
             <p className="text-[#C5A059]/60 font-bold text-xs uppercase tracking-widest flex items-center gap-2 opacity-70 mt-2"><Activity size={14}/> Berdasarkan Real-Time Calibration RNHKBP SSOT</p>
           </div>
           <button 
-            disabled={exporting}
+            disabled={exporting || data.length === 0}
             onClick={handleExportExcel}
             onMouseDown={(e) => handleSpringBtn(e, 'down')} onMouseUp={(e) => handleSpringBtn(e, 'up')}
             className="group flex items-center gap-3 px-8 py-4 bg-[#0a192f] border border-[#C5A059]/20 rounded-2xl text-[10px] font-black uppercase tracking-widest text-[#C5A059] hover:bg-[#C5A059] hover:text-[#051122] shadow-xl transition-all disabled:opacity-50"

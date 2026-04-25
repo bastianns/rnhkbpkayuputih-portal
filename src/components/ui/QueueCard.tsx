@@ -57,7 +57,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-1">Data SSOT (Existing)</p>
-                  <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">{currentCandidate.anggota_a?.nama_lengkap}</h3>
+                  <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">{currentCandidate.anggota?.nama_lengkap}</h3>
                 </div>
               </div>
 
@@ -84,10 +84,30 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DataPoint icon={<Mail size={14}/>} label="Email Terdaftar" value={currentCandidate.anggota_a?.email} isMatch={item.raw_data.email === currentCandidate.anggota_a?.email} />
-              <DataPoint icon={<Phone size={14}/>} label="Nomor Telepon" value={currentCandidate.anggota_a?.no_telp || '-'} isMatch={item.raw_data.no_telp === currentCandidate.anggota_a?.no_telp} />
-              <DataPoint icon={<Calendar size={14}/>} label="Tanggal Lahir" value={currentCandidate.anggota_a?.tanggal_lahir || '-'} isMatch={item.raw_data.tanggal_lahir === currentCandidate.anggota_a?.tanggal_lahir} />
-              <DataPoint icon={<MapPin size={14}/>} label="Wijk / Wilayah" value={currentCandidate.anggota_a?.wijk?.nama_wijk || '-'} isMatch={wijkName === currentCandidate.anggota_a?.wijk?.nama_wijk} />
+              <DataPoint 
+                icon={<Mail size={14}/>} 
+                label="Email Terdaftar" 
+                value={currentCandidate.anggota?.email} 
+                isMatch={item.raw_data.email === currentCandidate.anggota?.email} 
+              />
+              <DataPoint 
+                icon={<Phone size={14}/>} 
+                label="Nomor Telepon" 
+                value={currentCandidate.anggota?.no_telp || '-'} 
+                isMatch={item.raw_data.no_telp === currentCandidate.anggota?.no_telp} 
+              />
+              <DataPoint 
+                icon={<Calendar size={14}/>} 
+                label="Tanggal Lahir" 
+                value={currentCandidate.anggota?.tanggal_lahir || '-'} 
+                isMatch={item.raw_data.tanggal_lahir === currentCandidate.anggota?.tanggal_lahir} 
+              />
+              <DataPoint 
+                icon={<MapPin size={14}/>} 
+                label="Wijk / Wilayah" 
+                value={currentCandidate.anggota?.wijk?.nama_wijk || '-'} 
+                isMatch={wijkName === currentCandidate.anggota?.wijk?.nama_wijk} 
+              />
             </div>
           </div>
         )}

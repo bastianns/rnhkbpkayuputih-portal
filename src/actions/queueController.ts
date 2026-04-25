@@ -18,14 +18,37 @@ export async function fetchVettingQueue() {
       getAllWijk()
     ]);
 
-    // Ambil data pembanding (candidates) yang masih berstatus 'possible'
-    const { data: candidates } = await supabase
+    if (items.length === 0) return { items: [], wijkList };
+
+    // Fix Root Cause: Gunakan explicit constraint name untuk join Supabase
+    const { data: candidates, error: candidateError } = await supabase
       .from('dedup_candidate')
-      .select('*, anggota_a:id_anggota_a(*, wijk(nama_wijk))')
+      .select(`
+        id_candidate,
+        id_anggota_a,
+        id_quarantine_b,
+        score,
+        decision,
+        anggota!dedup_candidate_id_anggota_a_fkey (
+          id_anggota,
+          nama_lengkap,
+          tanggal_lahir,
+          no_telp,
+          alamat,
+          email,
+          wijk (
+            nama_wijk
+          )
+        )
+      `)
       .in('id_quarantine_b', items.map(i => i.id_quarantine))
       .eq('decision', 'possible');
 
-    // Hubungkan kandidat ke masing-masing item karantina (Support multiple candidates)
+    if (candidateError) {
+      console.error("Candidate Fetch Error:", candidateError.message);
+    }
+
+    // Hubungkan kandidat ke masing-masing item karantina
     const itemsWithCandidates = items.map(item => ({
       ...item,
       candidates: candidates?.filter(c => c.id_quarantine_b === item.id_quarantine) || []
@@ -40,37 +63,22 @@ export async function fetchVettingQueue() {
 
 /**
  * Resolusi data karantina berdasarkan keputusan Admin.
- * @param id ID Karantina (Quarantine ID)
- * @param action Tindakan (ACCEPT, MERGE, REJECT)
- * @param candidateId ID Kandidat (khusus untuk MERGE)
  */
 export async function resolveQuarantineAction(id: string, action: 'ACCEPT' | 'MERGE' | 'REJECT', candidateId?: string) {
   try {
     const supabase = await createClient();
     
     if (action === 'MERGE') {
-      // Masalah #1: Gunakan candidateId yang dikirim dari UI agar akurat
       const resolvedCandidateId = candidateId ?? await getCandidateIdByQuarantine(id);
-      
-      if (!resolvedCandidateId) {
-        throw new Error("Data pembanding tidak ditemukan untuk operasi MERGE.");
-      }
-
-      // Jalankan Atomic Transaction via RPC Database
+      if (!resolvedCandidateId) throw new Error("Data pembanding tidak ditemukan.");
       await resolveDedupViaRPC(resolvedCandidateId, action);
 
     } else if (action === 'ACCEPT') {
-      // Data bersih, promosikan langsung ke tabel anggota tetap via RPC Database
-      const { error } = await supabase.rpc('fn_admin_accept_quarantine', { 
-        p_quarantine_id: id 
-      });
+      const { error } = await supabase.rpc('fn_admin_accept_quarantine', { p_quarantine_id: id });
       if (error) throw error;
 
     } else if (action === 'REJECT') {
-      // Masalah #2: Gunakan RPC Database agar audit log konsisten dan atomik
-      const { error } = await supabase.rpc('fn_admin_reject_quarantine', {
-        p_quarantine_id: id
-      });
+      const { error } = await supabase.rpc('fn_admin_reject_quarantine', { p_quarantine_id: id });
       if (error) throw error;
     }
 

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ShieldCheck, LogIn } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import Script from 'next/script';
 // Import fitur Anime.js V4
 import { animate, spring, splitText, stagger } from 'animejs';
 import "./globals.css";
@@ -49,6 +50,37 @@ export default function RootLayout({
     // Tetap gunakan suppressHydrationWarning untuk menghindari error ekstensi browser
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased" suppressHydrationWarning>
+        {/* Maze Universal Tracking Script */}
+        <Script id="maze-universal" strategy="afterInteractive">
+          {`
+            (function (m, a, z, e) {
+              var s, t, u, v;
+              try {
+                t = m.sessionStorage.getItem('maze-us');
+              } catch (err) {}
+
+              if (!t) {
+                t = new Date().getTime();
+                try {
+                  m.sessionStorage.setItem('maze-us', t);
+                } catch (err) {}
+              }
+
+              u = document.currentScript || (function () {
+                var w = document.getElementsByTagName('script');
+                return w[w.length - 1];
+              })();
+              v = u && u.nonce;
+
+              s = a.createElement('script');
+              s.src = z + '?apiKey=' + e;
+              s.async = true;
+              if (v) s.setAttribute('nonce', v);
+              a.getElementsByTagName('head')[0].appendChild(s);
+              m.mazeUniversalSnippetApiKey = e;
+            })(window, document, 'https://snippet.maze.co/maze-universal-loader.js', 'dcf581db-14e4-47e0-bcb1-16721155e751');
+          `}
+        </Script>
         
         {!isDashboardOrAdmin && (
           <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">

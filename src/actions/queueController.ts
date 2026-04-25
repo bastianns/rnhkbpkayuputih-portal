@@ -20,8 +20,8 @@ export async function fetchVettingQueue() {
 
     if (items.length === 0) return { items: [], wijkList };
 
-    // Fix Root Cause: Gunakan explicit constraint name untuk join Supabase
-    const { data: candidates, error: candidateError } = await supabase
+    // 1. Fetch Candidates dengan explicit join
+    const { data: rawCandidates, error: candidateError } = await supabase
       .from('dedup_candidate')
       .select(`
         id_candidate,
@@ -35,7 +35,6 @@ export async function fetchVettingQueue() {
           tanggal_lahir,
           no_telp,
           alamat,
-          email,
           wijk (
             nama_wijk
           )
@@ -48,10 +47,22 @@ export async function fetchVettingQueue() {
       console.error("Candidate Fetch Error:", candidateError.message);
     }
 
-    // Hubungkan kandidat ke masing-masing item karantina
+    // 2. NORMALISASI: Supabase join sering mengembalikan array [ { anggota: [...] } ]
+    // Kita paksa menjadi objek tunggal agar frontend tidak bingung.
+    const normalizedCandidates = (rawCandidates || []).map(c => ({
+      ...c,
+      anggota: Array.isArray(c.anggota) ? (c.anggota[0] ?? null) : (c.anggota ?? null)
+    }));
+
+    // DEBUG: Lihat struktur data di terminal server
+    console.log("FETCH_QUEUE_DEBUG - Items Count:", items.length);
+    console.log("FETCH_QUEUE_DEBUG - Raw Candidate Sample:", JSON.stringify(rawCandidates?.[0], null, 2));
+    console.log("FETCH_QUEUE_DEBUG - Normalized Sample:", JSON.stringify(normalizedCandidates?.[0], null, 2));
+
+    // 3. Hubungkan kandidat ke masing-masing item karantina
     const itemsWithCandidates = items.map(item => ({
       ...item,
-      candidates: candidates?.filter(c => c.id_quarantine_b === item.id_quarantine) || []
+      candidates: normalizedCandidates.filter(c => c.id_quarantine_b === item.id_quarantine) || []
     }));
 
     return { items: itemsWithCandidates, wijkList };

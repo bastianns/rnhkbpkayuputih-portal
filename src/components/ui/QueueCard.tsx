@@ -15,6 +15,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
   const candidates: any[] = item.candidates || [];
   const [candidateIdx, setCandidateIdx] = useState(0);
   
+  // Ambil kandidat saat ini (Hasil normalisasi dari controller)
   const currentCandidate = candidates[candidateIdx] ?? null;
 
   return (
@@ -44,7 +45,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
         </div>
 
         {/* DATA LAMA (PEMBANDING / CANDIDATES) */}
-        {currentCandidate && (
+        {currentCandidate && currentCandidate.anggota && (
           <div className="flex-1 w-full space-y-6 text-left bg-blue-900/10 p-6 rounded-[2rem] border border-blue-500/20 relative overflow-hidden">
             <div className="absolute top-0 right-0 px-4 py-1 bg-blue-600 text-white text-[8px] font-black uppercase tracking-widest rounded-bl-xl shadow-lg">
                Match Found: {(currentCandidate.score * 100).toFixed(1)}%
@@ -57,7 +58,7 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-1">Data SSOT (Existing)</p>
-                  <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">{currentCandidate.anggota?.nama_lengkap}</h3>
+                  <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">{currentCandidate.anggota.nama_lengkap}</h3>
                 </div>
               </div>
 
@@ -87,26 +88,26 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
               <DataPoint 
                 icon={<Mail size={14}/>} 
                 label="Email Terdaftar" 
-                value={currentCandidate.anggota?.email} 
-                isMatch={item.raw_data.email === currentCandidate.anggota?.email} 
+                value={currentCandidate.anggota.email || '-'} 
+                isMatch={item.raw_data.email === currentCandidate.anggota.email} 
               />
               <DataPoint 
                 icon={<Phone size={14}/>} 
                 label="Nomor Telepon" 
-                value={currentCandidate.anggota?.no_telp || '-'} 
-                isMatch={item.raw_data.no_telp === currentCandidate.anggota?.no_telp} 
+                value={currentCandidate.anggota.no_telp || '-'} 
+                isMatch={item.raw_data.no_telp === currentCandidate.anggota.no_telp} 
               />
               <DataPoint 
                 icon={<Calendar size={14}/>} 
                 label="Tanggal Lahir" 
-                value={currentCandidate.anggota?.tanggal_lahir || '-'} 
-                isMatch={item.raw_data.tanggal_lahir === currentCandidate.anggota?.tanggal_lahir} 
+                value={currentCandidate.anggota.tanggal_lahir || '-'} 
+                isMatch={item.raw_data.tanggal_lahir === currentCandidate.anggota.tanggal_lahir} 
               />
               <DataPoint 
                 icon={<MapPin size={14}/>} 
                 label="Wijk / Wilayah" 
-                value={currentCandidate.anggota?.wijk?.nama_wijk || '-'} 
-                isMatch={wijkName === currentCandidate.anggota?.wijk?.nama_wijk} 
+                value={currentCandidate.anggota.wijk?.nama_wijk || '-'} 
+                isMatch={wijkName === currentCandidate.anggota.wijk?.nama_wijk} 
               />
             </div>
           </div>
@@ -127,11 +128,6 @@ export function QueueCard({ item, wijkName, loadingId, onAction, onSpring, prefi
               >
                 {isLoading ? <Loader2 className="animate-spin" size={16} /> : <><Merge size={16} /> Merge Records</>}
               </button>
-              {candidates.length > 1 && (
-                <p className="text-[8px] text-amber-400 font-bold uppercase tracking-widest text-center animate-pulse">
-                  +{candidates.length - 1} Kandidat lain terdeteksi
-                </p>
-              )}
             </>
           ) : (
             <button

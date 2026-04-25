@@ -140,7 +140,7 @@ function SuccessView({ prefixCls }: { prefixCls: string }) {
         <div className="space-y-3">
           <h2 className="text-3xl font-serif italic text-white">Registration Complete</h2>
           <p className="text-xs font-medium text-white/50 leading-relaxed uppercase tracking-widest">
-            Data Anda telah masuk ke sistem <span className="text-[#c5a059]">Quarantine</span>. Admin akan melakukan validasi SSOT segera.
+            Akun Anda telah berhasil dibuat. <span className="text-[#c5a059]">Selamat bergabung</span> di Portal Jemaat RNHKBP Kayu Putih.
           </p>
         </div>
         <button onClick={() => window.location.href = '/login'} className="w-full py-4 bg-[#c5a059] hover:bg-[#A68545] text-[#050c18] font-bold tracking-[0.2em] uppercase text-xs transition-all rounded-md">

@@ -84,7 +84,7 @@ export async function submitRegistrationForm(rawInput: unknown) {
 
     return { 
       success: true, 
-      message: 'Pendaftaran berhasil. Data Anda telah masuk ke antrean verifikasi admin.' 
+      message: 'Pendaftaran berhasil. Silakan coba masuk ke akun Anda.' 
     };
 
   } catch (error: any) {

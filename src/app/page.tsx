@@ -15,11 +15,11 @@ import {
 } from 'lucide-react';
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session);
+      setSession(session);
     });
   }, []);
 
@@ -50,23 +50,30 @@ export default function Home() {
             </div>
           </div>
           
-          <Link 
-            href={isLoggedIn ? "/dashboard" : "/login"} 
-            className="text-xs font-black text-[#0e141b] hover:text-blue-600 transition-all flex items-center gap-2 bg-white px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md"
-          >
-            {isLoggedIn ? (
-              <>
-                <LayoutDashboard size={14} />
-                Dashboard Anda
-              </>
-            ) : (
-              <>
-                <LogIn size={14} />
-                Akses Anggota
-              </>
+          <div className="flex items-center gap-3">
+            {session && (
+              <span className="hidden md:block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Active: {session.user.email}
+              </span>
             )}
-            <ArrowRight size={14} />
-          </Link>
+            <Link 
+              href={session ? "/dashboard" : "/login"} 
+              className="text-xs font-black text-[#0e141b] hover:text-blue-600 transition-all flex items-center gap-2 bg-white px-5 py-2.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md"
+            >
+              {session ? (
+                <>
+                  <LayoutDashboard size={14} />
+                  Masuk Dashboard
+                </>
+              ) : (
+                <>
+                  <LogIn size={14} />
+                  Akses Anggota
+                </>
+              )}
+              <ArrowRight size={14} />
+            </Link>
+          </div>
         </nav>
 
         <div className="max-w-[1280px] w-full grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">

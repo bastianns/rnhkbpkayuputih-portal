@@ -31,8 +31,12 @@ export default function DashboardBridge() {
         if (member) {
           router.push(`/dashboard/${member.id_anggota}`);
         } else {
-          // Placeholder untuk user yang baru daftar (masih di karantina)
-          router.push(`/dashboard/${user.id}`);
+          // KASUS KRITIS: User login ada di Auth tapi profil tidak ada di tabel Anggota.
+          // Ini biasanya terjadi jika ada sisa sesi lama atau akun admin/pihak lain.
+          // Solusi: Paksa logout untuk membersihkan sesi yang membingungkan.
+          console.error("Profile not found for this session. Clearing session...");
+          await supabase.auth.signOut();
+          router.push('/login?error=profile_not_found');
         }
       } else {
         router.push('/login');

@@ -177,7 +177,7 @@ export default function MemberMobileDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[ { icon: <Star />, label: "Total Points", val: totalPoin }, { icon: <Calendar />, label: "Activities Logged", val: activities.length, click: () => router.push(`/dashboard/${id}/history`) }, { icon: <Trophy />, label: "Wijk Standing", val: "Top 10" } ].map((item, i) => (
+            {[ { icon: <Star />, label: "Total Points", val: totalPoin }, { icon: <Calendar />, label: "Activities Logged", val: activities.length, click: () => router.push(`/dashboard/${id}/history`) }, { icon: <Trophy />, label: "Wijk Standing", val: "Top 10", click: () => router.push(`/dashboard/${id}/leaderboard`) } ].map((item, i) => (
               <div key={i} onClick={item.click} className={`anim-stat card-border bg-[#162a45]/30 rounded-xl p-8 flex flex-col items-center justify-center text-center space-y-4 backdrop-blur-sm transition-all duration-300 hover:bg-[#162a45]/50 ${item.click ? 'cursor-pointer group' : ''}`} style={{ opacity: 0 }}>
                 <div className="text-[#d4af37] gold-glow group-hover:scale-110 transition-transform w-10 h-10">{item.icon}</div>
                 <div className="space-y-1">

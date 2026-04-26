@@ -44,9 +44,23 @@ export default function RegistrationForm({ prefixCls = 'rc-reg' }: RegistrationF
   };
 
   const handleNextStep1 = () => {
-    const { nama_lengkap, email, password, id_wijk, tanggal_lahir } = formData;
-    if (!nama_lengkap || !email || !password || !id_wijk || !tanggal_lahir || tanggal_lahir.trim() === "") {
-      setError("Mohon lengkapi semua data identitas termasuk Tanggal Lahir.");
+    const { nama_lengkap, email, password, id_wijk, tanggal_lahir, no_telp, alamat } = formData;
+    if (!nama_lengkap || !email || !password || !id_wijk || !tanggal_lahir || !no_telp || !alamat) {
+      setError("Mohon lengkapi semua data identitas utama (termasuk Alamat & WA).");
+      return;
+    }
+    if (alamat.length < 10) {
+      setError("Alamat domisili minimal harus 10 karakter.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Format email tidak valid.");
+      return;
+    }
+    const waRegex = /^(\+62|62|0)8\d{8,11}$/;
+    if (!waRegex.test(no_telp)) {
+      setError("Format nomor WhatsApp tidak valid (gunakan 08/62/+62).");
       return;
     }
     setError(null); setCurrentStep(2);

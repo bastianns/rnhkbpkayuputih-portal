@@ -124,6 +124,16 @@ export default function RegistrationPage() {
         setError("Alamat domisili minimal harus 10 karakter.");
         return;
       }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError("Format email tidak valid.");
+        return;
+      }
+      const waRegex = /^(\+62|62|0)8\d{8,11}$/;
+      if (!waRegex.test(no_telp)) {
+        setError("Format nomor WhatsApp tidak valid (gunakan 08/62/+62).");
+        return;
+      }
     }
 
     if (currentStep === 2) {

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from '@/lib/supabaseServer';
+import { redirect } from 'next/navigation';
 
 /**
  * Memproses permintaan login jemaat dan admin secara aman.
@@ -39,4 +40,18 @@ export async function processLoginRequest(email: string, password?: string, redi
       
     return { success: false, error: errorMessage };
   }
+}
+
+/**
+ * Menghapus sesi pengguna secara permanen.
+ */
+export async function handleLogout() {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signOut();
+  
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  redirect('/login');
 }

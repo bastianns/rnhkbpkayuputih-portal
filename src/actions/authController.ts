@@ -1,4 +1,4 @@
-"use server";
+'use server';
 
 import { createClient } from '@/lib/supabaseServer';
 import { redirect } from 'next/navigation';
@@ -7,19 +7,23 @@ import { redirect } from 'next/navigation';
  * Memproses permintaan login jemaat dan admin secara aman.
  * Menggunakan metadata role dari JWT untuk menentukan hak akses admin.
  */
-export async function processLoginRequest(email: string, password?: string, redirectPath: string = '/dashboard') {
+export async function processLoginRequest(
+  email: string,
+  password?: string,
+  redirectPath: string = '/dashboard'
+) {
   try {
     const supabase = await createClient();
     const formattedEmail = email.toLowerCase().trim();
 
     if (!password) {
-      return { success: false, error: "Password wajib diisi." };
+      return { success: false, error: 'Password wajib diisi.' };
     }
 
     // 1. Melakukan autentikasi kredensial
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
-      email: formattedEmail, 
-      password 
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: formattedEmail,
+      password,
     });
 
     if (authError) throw authError;
@@ -28,30 +32,40 @@ export async function processLoginRequest(email: string, password?: string, redi
     // Supabase menyimpan role di app_metadata setelah kita set di SQL/Dashboard
     const isSystemAdmin = authData.user?.app_metadata?.role === 'admin';
 
-    return { 
-      success: true, 
-      redirect: isSystemAdmin ? '/admin' : redirectPath 
+    return {
+      success: true,
+      redirect: isSystemAdmin ? '/admin' : redirectPath,
     };
-
   } catch (error: any) {
     const errorMessage = error.message.includes('Invalid login credentials')
       ? 'Email atau Password salah.'
       : error.message || 'Gagal melakukan autentikasi.';
-      
+
     return { success: false, error: errorMessage };
   }
 }
 
 /**
- * Menghapus sesi pengguna secara permanen.
+ * Menghapus sesi pengguna secara permanen dari server dan browser,
+ * lalu redirect ke halaman login.
+ *
+ * PENTING: Fungsi ini menggunakan redirect() dari Next.js yang bekerja
+ * dengan cara melempar error secara internal — ini perilaku normal.
+ * Jangan wrap pemanggilan fungsi ini dengan try/catch yang menangkap
+ * semua error, karena redirect tidak akan berjalan.
  */
 export async function handleLogout() {
   const supabase = await createClient();
+
   const { error } = await supabase.auth.signOut();
-  
+
   if (error) {
+    // Kembalikan error ke client jika signOut gagal
+    // sehingga UI bisa menampilkan pesan yang sesuai
     return { success: false, error: error.message };
   }
 
+  // redirect() di sini memastikan cookie sesi dihapus dengan benar
+  // di level server sebelum user diarahkan ke halaman login
   redirect('/login');
 }

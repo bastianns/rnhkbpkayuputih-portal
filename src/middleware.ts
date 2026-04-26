@@ -2,23 +2,16 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * Middleware ini berjalan di Edge Runtime sebelum setiap request.
- * Tugasnya adalah memvalidasi sesi pengguna dan melindungi route /admin/*.
- *
- * Kenapa middleware lebih aman daripada hanya mengandalkan layout.tsx?
- * Karena middleware berjalan di server sebelum halaman dirender,
- * sehingga tidak ada konten admin yang bocor ke pengguna yang tidak terautentikasi.
+ * Middleware untuk validasi sesi dan proteksi rute berdasarkan role (RBAC).
+ * Memastikan Admin ke /admin dan Jemaat ke /dashboard.
  */
 export async function middleware(request: NextRequest) {
-  // Buat response baru yang akan kita modifikasi jika perlu
   const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
 
-  // Buat Supabase client yang bisa membaca dan menulis cookie
-  // langsung dari/ke objek request & response
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -28,11 +21,9 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // Set cookie di request (untuk komponen server di bawahnya)
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          // Set cookie di response (untuk browser)
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           );
@@ -41,36 +32,53 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // PENTING: Gunakan getUser() bukan getSession() karena getUser()
-  // memvalidasi token langsung ke server Supabase (lebih aman).
-  // getSession() hanya membaca dari cookie tanpa validasi ulang.
+  // Validasi user langsung ke server Supabase
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
-  const isLoginPage = request.nextUrl.pathname === '/login';
+  const { pathname } = request.nextUrl;
+  const isAdminRoute = pathname.startsWith('/admin');
+  const isUserRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/check-in');
+  const isLoginPage = pathname === '/login';
 
-  // Jika mengakses /admin/* tanpa sesi yang valid → redirect ke /login
-  if (isAdminRoute && !user) {
+  const userRole = user?.app_metadata?.role;
+
+  // 1. Proteksi Rute Admin: Hanya untuk role 'admin'
+  if (isAdminRoute) {
+    if (!user) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirectTo', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    
+    if (userRole !== 'admin') {
+      // Jika jemaat mencoba masuk ke admin, arahkan ke dashboard mereka
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // 2. Proteksi Rute Jemaat: Harus login
+  if (isUserRoute && !user) {
     const loginUrl = new URL('/login', request.url);
-    // Simpan halaman yang ingin diakses agar bisa redirect kembali setelah login
-    loginUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
+    loginUrl.searchParams.set('redirectTo', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Jika sudah login dan mencoba akses /login → redirect ke /admin
+  // 3. Logika Redirect Login: Jika sudah punya sesi, arahkan sesuai role
   if (isLoginPage && user) {
-    return NextResponse.redirect(new URL('/admin', request.url));
+    const destination = userRole === 'admin' ? '/admin' : '/dashboard';
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   return response;
 }
 
-// Tentukan route mana saja yang diproses oleh middleware ini
 export const config = {
   matcher: [
-    '/admin/:path*', // Semua halaman admin
-    '/login',        // Halaman login (untuk redirect jika sudah login)
+    '/admin/:path*',
+    '/dashboard/:path*',
+    '/check-in/:path*',
+    '/login',
   ],
 };

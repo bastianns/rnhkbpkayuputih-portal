@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabaseServer';
 import { redirect } from 'next/navigation';
-import { createServerAuditLog } from '@/lib/audit';
+import { createServerAuditLog } from '@/lib/auditServer';
 
 /**
  * Memproses permintaan login jemaat dan admin secara aman.

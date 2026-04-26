@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Middleware untuk validasi sesi dan proteksi rute berdasarkan role (RBAC).
  * Memastikan Admin ke /admin dan Jemaat ke /dashboard.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const response = NextResponse.next({
     request: {
       headers: request.headers,

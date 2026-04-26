@@ -1,10 +1,10 @@
-import { supabase as browserSupabase } from './supabase';
+import { createClient } from './supabaseServer';
 
 /**
- * Audit Log untuk sisi Client (Browser).
- * Menggunakan browser client untuk mencatat aktivitas.
+ * Audit Log untuk sisi Server (Server Actions / Server Components).
+ * Fungsi ini harus dipanggil di lingkungan server saja.
  */
-export async function createAuditLog(
+export async function createServerAuditLog(
   action: string,
   entity: string,
   entityId: string | null = null,
@@ -13,11 +13,12 @@ export async function createAuditLog(
   explicitActorId: string | null = null
 ) {
   try {
-    const { data } = await browserSupabase.auth.getUser();
+    const client = await createClient();
+    const { data } = await client.auth.getUser();
     const user = data.user;
     const actor_id = explicitActorId || user?.id || null;
 
-    await browserSupabase.from('audit_log').insert({
+    await client.from('audit_log').insert({
       actor_id,
       action,
       entity,
@@ -26,6 +27,6 @@ export async function createAuditLog(
       new_data: newData
     });
   } catch (err) {
-    console.error('Client Audit Log Error:', err);
+    console.error('Server Audit Log Error:', err);
   }
 }

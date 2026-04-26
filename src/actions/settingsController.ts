@@ -10,7 +10,7 @@ export async function getEngineSettings() {
 export async function saveEngineSettings(parameters: any[]) {
   try {
     for (const param of parameters) {
-      // 1. Logika Inti Fellegi-Sunter [cite: 58]
+      // 1. Logika Inti Fellegi-Sunter
       if (param.match_probability_m <= param.unmatch_probability_u) {
         return { 
           success: false, 
@@ -18,21 +18,16 @@ export async function saveEngineSettings(parameters: any[]) {
         };
       }
 
-      // 2. Kalkulasi Agreement Weight (wa) via Logaritma Natural 
-      // Rumus: wa = ln(m/u)
-      const wa = Math.log(param.match_probability_m / param.unmatch_probability_u);
-
-      // 3. Simpan ke Model
+      // 2. Simpan ke Model (Hanya probabilitas, wa & wd dihitung otomatis oleh Postgres)
       await updateParameter(
         param.field_name, 
         param.match_probability_m, 
-        param.unmatch_probability_u,
-        wa
+        param.unmatch_probability_u
       );
     }
     return { success: true };
-  } catch (error) {
-    return { success: false, error: "Gagal menyimpan parameter" };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Gagal menyimpan parameter" };
   }
 }
 

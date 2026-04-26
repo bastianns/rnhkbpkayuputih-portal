@@ -11,14 +11,13 @@ export async function fetchParameters() {
   return data;
 }
 
-export async function updateParameter(fieldName: string, m: number, u: number, wa: number) {
+export async function updateParameter(fieldName: string, m: number, u: number) {
   const supabase = await createClient();
   const { error } = await supabase
     .from('dedup_parameter')
     .update({ 
       match_probability_m: m, 
-      unmatch_probability_u: u,
-      agreement_weight_wa: wa // Sesuai Post-condition UC 
+      unmatch_probability_u: u
     })
     .eq('field_name', fieldName);
   if (error) throw error;

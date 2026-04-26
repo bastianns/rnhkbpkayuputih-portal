@@ -1,18 +1,33 @@
-import { supabase } from './supabase';
+import { supabase as browserSupabase } from './supabase';
+import { createClient as createServerSupabase } from './supabaseServer';
 
 export async function createAuditLog(
-  action: string,   // Contoh: 'INSERT', 'UPDATE_STATUS'
-  entity: string,   // Contoh: 'kegiatan', 'wijk'
+  action: string,
+  entity: string,
   entityId: string | null = null,
   oldData: any = null,
-  newData: any = null
+  newData: any = null,
+  explicitActorId: string | null = null
 ) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // Memasukkan data sesuai skema database asli Anda
-    await supabase.from('audit_log').insert({
-      actor_id: user?.id || null,
+    let user;
+    let client;
+
+    // Tentukan client dan user berdasarkan environment
+    if (typeof window === 'undefined') {
+      client = await createServerSupabase();
+      const { data } = await client.auth.getUser();
+      user = data.user;
+    } else {
+      client = browserSupabase;
+      const { data } = await client.auth.getUser();
+      user = data.user;
+    }
+
+    const actor_id = explicitActorId || user?.id || null;
+
+    await client.from('audit_log').insert({
+      actor_id,
       action,
       entity,
       entity_id: entityId,

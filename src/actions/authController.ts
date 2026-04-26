@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabaseServer';
 import { redirect } from 'next/navigation';
+import { createAuditLog } from '@/lib/audit';
 
 /**
  * Memproses permintaan login jemaat dan admin secara aman.
@@ -29,8 +30,16 @@ export async function processLoginRequest(
     if (authError) throw authError;
 
     // 2. KEAMANAN: Verifikasi Role Admin dari App Metadata (bukan cek domain email)
-    // Supabase menyimpan role di app_metadata setelah kita set di SQL/Dashboard
     const isSystemAdmin = authData.user?.app_metadata?.role === 'admin';
+
+    // 3. Catat Audit Log
+    await createAuditLog(
+      isSystemAdmin ? 'ADMIN_LOGIN' : 'MEMBER_LOGIN',
+      'auth',
+      authData.user.id,
+      null,
+      { email: formattedEmail, role: isSystemAdmin ? 'admin' : 'member' }
+    );
 
     return {
       success: true,
